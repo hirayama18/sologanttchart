@@ -1,4 +1,10 @@
 import { NextRequest } from 'next/server'
+
+// Ensure this Route Handler runs on the Node.js runtime (Prisma/exceljs require Node APIs)
+export const runtime = 'nodejs'
+// Prevent any attempt at static optimization during build
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
 import { ProjectDAL } from '@/dal/projects'
 import { addDays, format, startOfDay } from 'date-fns'
 
