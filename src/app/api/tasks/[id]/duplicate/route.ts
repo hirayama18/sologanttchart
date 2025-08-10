@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
-import { TaskDAL } from '@/dal/tasks'
+// Delay DAL import to runtime
 import { TaskResponse } from '@/lib/types/api'
 
 export async function POST(
@@ -10,6 +10,7 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   try {
+    const { TaskDAL } = await import('@/dal/tasks')
     const task = await TaskDAL.duplicate(params.id)
     
     const response: TaskResponse = {

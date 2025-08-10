@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
-import { ProjectDAL } from '@/dal/projects'
+// Delay DAL import to runtime to avoid build-time resolution issues
 import { UpdateProjectRequest, ProjectWithTasksResponse, TaskResponse } from '@/lib/types/api'
 
 export async function GET(
@@ -10,6 +10,7 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
+    const { ProjectDAL } = await import('@/dal/projects')
     const project = await ProjectDAL.getById(params.id)
     
     if (!project) {
@@ -57,6 +58,7 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   try {
+    const { ProjectDAL } = await import('@/dal/projects')
     const body: UpdateProjectRequest = await request.json()
     
     // TODO: Clerk認証実装後に所有者チェックを実装
@@ -110,6 +112,7 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
+    const { ProjectDAL } = await import('@/dal/projects')
     // TODO: Clerk認証実装後に所有者チェックを実装
     // const userId = 'temp-user-id'
     // const isOwner = await ProjectDAL.isOwner(params.id, userId)

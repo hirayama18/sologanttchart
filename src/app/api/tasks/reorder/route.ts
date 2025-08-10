@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
-import { TaskDAL } from '@/dal/tasks'
+// Delay DAL import to runtime
 
 type ReorderBody = {
   orderedIds: string[]
@@ -10,6 +10,7 @@ type ReorderBody = {
 
 export async function POST(request: NextRequest) {
   try {
+    const { TaskDAL } = await import('@/dal/tasks')
     const body = (await request.json()) as ReorderBody | string[]
     const orderedIds: string[] = Array.isArray(body)
       ? (body as string[])

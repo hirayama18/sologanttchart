@@ -2,11 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
-import { TaskDAL } from '@/dal/tasks'
+// Delay DAL import to runtime
 import { CreateTaskRequest, TaskResponse } from '@/lib/types/api'
 
 export async function POST(request: NextRequest) {
   try {
+    const { TaskDAL } = await import('@/dal/tasks')
     const body: CreateTaskRequest = await request.json()
     
     const taskData = {

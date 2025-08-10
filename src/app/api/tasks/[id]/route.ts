@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
-import { TaskDAL } from '@/dal/tasks'
+// Delay DAL import to runtime
 import { UpdateTaskRequest, TaskResponse } from '@/lib/types/api'
 
 export async function GET(
@@ -10,6 +10,7 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
+    const { TaskDAL } = await import('@/dal/tasks')
     const task = await TaskDAL.getById(params.id)
     
     if (!task) {
@@ -48,6 +49,7 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   try {
+    const { TaskDAL } = await import('@/dal/tasks')
     const body: UpdateTaskRequest = await request.json()
     
     const updateData: Partial<{
@@ -109,6 +111,7 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
+    const { TaskDAL } = await import('@/dal/tasks')
     await TaskDAL.delete(params.id)
     
     return NextResponse.json({ message: 'Task deleted successfully' })

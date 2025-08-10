@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
-import { ProjectDAL } from '@/dal/projects'
+// Delay DAL import to runtime
 import { CreateProjectRequest, ProjectResponse } from '@/lib/types/api'
 
 export async function GET() {
@@ -10,6 +10,7 @@ export async function GET() {
     // TODO: Clerk認証実装後にuserId取得を実装
     const userId = 'temp-user-id' // 一時的なユーザーID
     
+    const { ProjectDAL } = await import('@/dal/projects')
     const projects = await ProjectDAL.getByUserId(userId)
     
     const response: ProjectResponse[] = projects.map(project => ({
@@ -39,6 +40,7 @@ export async function POST(request: NextRequest) {
     // TODO: Clerk認証実装後にuserId取得を実装
     const userId = 'temp-user-id' // 一時的なユーザーID
     
+    const { ProjectDAL } = await import('@/dal/projects')
     const projectData = {
       title: body.title,
       startDate: new Date(body.startDate),
