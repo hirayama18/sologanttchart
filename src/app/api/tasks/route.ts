@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
+export const fetchCache = 'force-no-store'
 import { TaskDAL } from '@/dal/tasks'
 import { CreateTaskRequest, TaskResponse } from '@/lib/types/api'
 
