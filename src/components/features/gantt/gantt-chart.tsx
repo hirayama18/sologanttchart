@@ -11,9 +11,10 @@ interface GanttChartProps {
   tasks: TaskResponse[]
   onTasksChange?: () => void
   onEditTask?: (task: TaskResponse) => void
+  onTaskUpdate?: (taskId: string, updates: Partial<TaskResponse>) => void
 }
 
-export function GanttChart({ project, tasks, onTasksChange, onEditTask }: GanttChartProps) {
+export function GanttChart({ project, tasks, onTasksChange, onEditTask, onTaskUpdate }: GanttChartProps) {
   // プロジェクト開始日（ローカル日単位に正規化）
   const projectStartDay = useMemo(() => startOfDay(new Date(project.startDate)), [project.startDate])
 
@@ -124,8 +125,25 @@ export function GanttChart({ project, tasks, onTasksChange, onEditTask }: GanttC
 
     const handleUp = async () => {
       if (!dragState) return
+      
+      const updatedStartISO = dragState.previewStart.toISOString()
+      const updatedEndISO = dragState.previewEnd.toISOString()
+      
+      // 1. 楽観的UI更新：即座にローカル状態を更新
+      if (onTaskUpdate) {
+        onTaskUpdate(dragState.taskId, {
+          plannedStart: updatedStartISO,
+          plannedEnd: updatedEndISO,
+        })
+      }
+      
+      // 2. ドラッグ状態をクリア（UI即座に反応）
+      setDragState(null)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      
+      // 3. バックグラウンドでAPI同期（非同期・非ブロッキング）
       try {
-        // 日付のみ（YYYY-MM-DD）で送信してタイムゾーン問題を回避
         const body = {
           plannedStart: format(dragState.previewStart, 'yyyy-MM-dd'),
           plannedEnd: format(dragState.previewEnd, 'yyyy-MM-dd'),
@@ -135,14 +153,23 @@ export function GanttChart({ project, tasks, onTasksChange, onEditTask }: GanttC
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body),
         })
-        onTasksChange?.()
+        // API成功時は何もしない（既にUIは更新済み）
       } catch (e) {
         console.error('Failed to save task change', e)
-        alert('タスクの更新に失敗しました')
-      } finally {
-        setDragState(null)
-        document.body.style.cursor = ''
-        document.body.style.userSelect = ''
+        
+        // 4. エラー時：ローカル状態を元に戻す（ロールバック）
+        if (onTaskUpdate) {
+          onTaskUpdate(dragState.taskId, {
+            plannedStart: dragState.originalStart.toISOString(),
+            plannedEnd: dragState.originalEnd.toISOString(),
+          })
+        }
+        
+        // ユーザーにエラーを通知
+        alert('タスクの更新に失敗しました。元の状態に戻します。')
+        
+        // フォールバック：全データ再取得
+        onTasksChange?.()
       }
     }
 
@@ -152,7 +179,7 @@ export function GanttChart({ project, tasks, onTasksChange, onEditTask }: GanttC
       document.removeEventListener('mousemove', handleMove)
       document.removeEventListener('mouseup', handleUp)
     }
-  }, [dragState, onTasksChange, visibleDates, clampToVisible])
+  }, [dragState, onTasksChange, onTaskUpdate, visibleDates, clampToVisible])
 
   // 月ごとのセグメントを作成（上段にまとめて表示）
   const monthSegments = useMemo(() => {

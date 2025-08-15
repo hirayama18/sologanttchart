@@ -87,6 +87,15 @@ export default function GanttPage() {
     fetchProject() // プロジェクトとタスクを再取得
   }
 
+  // 楽観的UI更新：特定のタスクのみローカル状態で更新
+  const handleTaskUpdate = useCallback((taskId: string, updates: Partial<TaskResponse>) => {
+    setTasks(prevTasks => 
+      prevTasks.map(task => 
+        task.id === taskId ? { ...task, ...updates } : task
+      )
+    )
+  }, [])
+
   const handleTaskCreated = () => {
     setTaskFormOpen(false)
     handleTasksChange()
@@ -252,6 +261,7 @@ export default function GanttPage() {
             project={project}
             tasks={tasks}
             onTasksChange={handleTasksChange}
+            onTaskUpdate={handleTaskUpdate}
             onEditTask={(task) => {
               setEditingTask(task)
               setTaskFormOpen(true)
