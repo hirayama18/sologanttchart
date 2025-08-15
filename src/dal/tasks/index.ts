@@ -29,12 +29,17 @@ export class TaskDAL {
    * タスク作成
    */
   static async create(data: CreateTaskData): Promise<Task> {
-    // orderが指定されていない場合、最大値+1を設定
-    if (data.order === undefined) {
-      const maxOrder = await prisma.task.aggregate({
-        where: { projectId: data.projectId },
-        _max: { order: true }
-      })
+    // 新規タスクは必ず一番下に配置するため、最大値+1を設定
+    const maxOrder = await prisma.task.aggregate({
+      where: { 
+        projectId: data.projectId,
+        deleted: false 
+      },
+      _max: { order: true }
+    })
+    
+    // orderが指定されていない場合、または指定されたorderが最大値以下の場合は最大値+1に設定
+    if (data.order === undefined || data.order <= (maxOrder._max.order || 0)) {
       data.order = (maxOrder._max.order || 0) + 1
     }
 
@@ -98,9 +103,12 @@ export class TaskDAL {
       throw new Error('Task not found')
     }
 
-    // 最大orderを取得
+    // 最大orderを取得（削除済みタスクは除外）
     const maxOrder = await prisma.task.aggregate({
-      where: { projectId: originalTask.projectId },
+      where: { 
+        projectId: originalTask.projectId,
+        deleted: false 
+      },
       _max: { order: true }
     })
 

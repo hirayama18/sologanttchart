@@ -34,6 +34,7 @@ export function useOptimizedTaskOperations({
     const tempId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
     
     // 2. 楽観的UI更新用の仮タスクデータを作成
+    // orderはAPIで自動計算されるため、仮の値として大きな数値を設定
     const optimisticTask: TaskResponse = {
       id: tempId,
       title: taskData.title,
@@ -41,7 +42,7 @@ export function useOptimizedTaskOperations({
       plannedStart: new Date(taskData.plannedStart + 'T00:00:00.000Z').toISOString(),
       plannedEnd: new Date(taskData.plannedEnd + 'T00:00:00.000Z').toISOString(),
       completedAt: taskData.completedAt ? new Date(taskData.completedAt + 'T00:00:00.000Z').toISOString() : null,
-      order: taskData.order || 0,
+      order: 999999, // 仮の値（APIで正しい値が設定される）
       deleted: false,
       projectId: taskData.projectId,
       createdAt: new Date().toISOString(),

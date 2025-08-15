@@ -104,7 +104,7 @@ export function TaskForm({ open, onOpenChange, onTaskCreated, projectId, task, o
           plannedStart: formData.plannedStart,  // YYYY-MM-DD形式で送信
           plannedEnd: formData.plannedEnd,      // YYYY-MM-DD形式で送信
           projectId,
-          order: 0, // デフォルト値
+          // orderは送信しない（DALで自動計算される）
           completedAt: formData.completedAt || null
         }
 
@@ -137,7 +137,7 @@ export function TaskForm({ open, onOpenChange, onTaskCreated, projectId, task, o
           plannedStart: formData.plannedStart,
           plannedEnd: formData.plannedEnd,
           projectId,
-          order: 0,
+          // orderは送信しない（DALで自動計算される）
           completedAt: formData.completedAt || null
         }
 
