@@ -1,10 +1,11 @@
 'use client'
 
-import React, { useMemo, memo, useCallback } from 'react'
+import React, { useMemo, memo, useCallback, useEffect } from 'react'
 import { Pencil, Trash2, Copy } from 'lucide-react'
 import { TaskResponse, ProjectWithTasksResponse } from '@/lib/types/api'
 import { format, addDays, startOfDay, differenceInCalendarDays, isWeekend } from 'date-fns'
 import { ja } from 'date-fns/locale'
+import { useOptimizedTaskUpdate } from '@/hooks/useOptimizedTaskUpdate'
 
 // ドラッグ状態の型定義
 type DragState = {
@@ -127,6 +128,14 @@ interface GanttChartProps {
 }
 
 export function GanttChart({ project, tasks, onTasksChange, onEditTask, onTaskUpdate }: GanttChartProps) {
+  // 最適化されたタスク更新フック（デバウンシング + バッチ処理）
+  const { updateTask: optimizedUpdateTask, flushPendingUpdates, hasPendingUpdates } = useOptimizedTaskUpdate({
+    onLocalUpdate: onTaskUpdate || (() => {}),
+    onBatchRefresh: onTasksChange,
+    debounceDelay: 500, // 500ms後にAPI呼び出し
+    batchDelay: 200     // 200ms以内の複数更新をバッチ処理
+  })
+
   // プロジェクト開始日（ローカル日単位に正規化）
   const projectStartDay = useMemo(() => startOfDay(new Date(project.startDate)), [project.startDate])
 
@@ -168,6 +177,35 @@ export function GanttChart({ project, tasks, onTasksChange, onEditTask, onTaskUp
       alert('並び替えの保存に失敗しました')
     }
   }
+
+  // ページ離脱時やコンポーネントアンマウント時の保留中更新処理
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasPendingUpdates()) {
+        e.preventDefault()
+        e.returnValue = '保存されていない変更があります。ページを離れますか？'
+      }
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden' && hasPendingUpdates()) {
+        // ページが非表示になる時に保留中の更新を強制実行
+        flushPendingUpdates()
+      }
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      // コンポーネントアンマウント時も保留中の更新を実行
+      if (hasPendingUpdates()) {
+        flushPendingUpdates()
+      }
+    }
+  }, [hasPendingUpdates, flushPendingUpdates])
 
   const clampToVisible = React.useCallback((date: Date) => {
     const min = visibleDates[0]
@@ -243,54 +281,40 @@ export function GanttChart({ project, tasks, onTasksChange, onEditTask, onTaskUp
       }
     }
 
-    const handleUp = async () => {
+    const handleUp = () => {
       if (!dragState) return
       
       const updatedStartISO = dragState.previewStart.toISOString()
       const updatedEndISO = dragState.previewEnd.toISOString()
+      const originalStartISO = dragState.originalStart.toISOString()
+      const originalEndISO = dragState.originalEnd.toISOString()
       
-      // 1. 楽観的UI更新：即座にローカル状態を更新
-      if (onTaskUpdate) {
-        onTaskUpdate(dragState.taskId, {
-          plannedStart: updatedStartISO,
-          plannedEnd: updatedEndISO,
-        })
+      // API更新データ（YYYY-MM-DD形式）
+      const apiUpdateData = {
+        plannedStart: format(dragState.previewStart, 'yyyy-MM-dd'),
+        plannedEnd: format(dragState.previewEnd, 'yyyy-MM-dd'),
       }
       
-      // 2. ドラッグ状態をクリア（UI即座に反応）
+      // UI更新データ（ISO形式）
+      const uiUpdateData = {
+        plannedStart: updatedStartISO,
+        plannedEnd: updatedEndISO,
+      }
+      
+      // ロールバック用の元データ
+      const originalData = {
+        plannedStart: originalStartISO,
+        plannedEnd: originalEndISO,
+      }
+      
+      // ドラッグ状態をクリア（UI即座に反応）
+      const taskId = dragState.taskId
       setDragState(null)
       document.body.style.cursor = ''
       document.body.style.userSelect = ''
       
-      // 3. バックグラウンドでAPI同期（非同期・非ブロッキング）
-      try {
-        const body = {
-          plannedStart: format(dragState.previewStart, 'yyyy-MM-dd'),
-          plannedEnd: format(dragState.previewEnd, 'yyyy-MM-dd'),
-        }
-        await fetch(`/api/tasks/${dragState.taskId}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
-        })
-        // API成功時は何もしない（既にUIは更新済み）
-      } catch (e) {
-        console.error('Failed to save task change', e)
-        
-        // 4. エラー時：ローカル状態を元に戻す（ロールバック）
-        if (onTaskUpdate) {
-          onTaskUpdate(dragState.taskId, {
-            plannedStart: dragState.originalStart.toISOString(),
-            plannedEnd: dragState.originalEnd.toISOString(),
-          })
-        }
-        
-        // ユーザーにエラーを通知
-        alert('タスクの更新に失敗しました。元の状態に戻します。')
-        
-        // フォールバック：全データ再取得
-        onTasksChange?.()
-      }
+      // 最適化されたタスク更新（デバウンシング + バッチ処理 + 楽観的UI）
+      optimizedUpdateTask(taskId, { ...uiUpdateData, ...apiUpdateData }, originalData)
     }
 
     document.addEventListener('mousemove', handleMove)
@@ -299,7 +323,7 @@ export function GanttChart({ project, tasks, onTasksChange, onEditTask, onTaskUp
       document.removeEventListener('mousemove', handleMove)
       document.removeEventListener('mouseup', handleUp)
     }
-  }, [dragState, onTasksChange, onTaskUpdate, visibleDates, clampToVisible, addDaysSafe, pxToDays])
+  }, [dragState, onTasksChange, onTaskUpdate, visibleDates, clampToVisible, addDaysSafe, pxToDays, optimizedUpdateTask])
 
   // 月ごとのセグメントを作成（上段にまとめて表示）
   const monthSegments = useMemo(() => {

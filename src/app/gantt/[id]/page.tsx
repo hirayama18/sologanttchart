@@ -96,6 +96,14 @@ export default function GanttPage() {
     )
   }, [])
 
+  // 最適化されたタスク更新フック（将来の拡張用）
+  // const { updateTask: optimizedPageTaskUpdate, flushPendingUpdates: flushPageUpdates } = useOptimizedTaskUpdate({
+  //   onLocalUpdate: handleTaskUpdate,
+  //   onBatchRefresh: handleTasksChange,
+  //   debounceDelay: 800, // ページレベルは少し長めの遅延
+  //   batchDelay: 400     // バッチ処理も少し長めに設定
+  // })
+
   const handleTaskCreated = () => {
     setTaskFormOpen(false)
     handleTasksChange()
