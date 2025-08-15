@@ -1,16 +1,17 @@
 import { NextRequest } from 'next/server'
-import { ProjectDAL } from '@/dal/projects'
 import { addDays, format, startOfDay } from 'date-fns'
 import ExcelJS from 'exceljs'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
+export const revalidate = false
 
 export async function POST(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
+  const { ProjectDAL } = await import('@/dal/projects')
   const project = await ProjectDAL.getById(id)
   if (!project) {
     return new Response(JSON.stringify({ error: 'Project not found' }), {
