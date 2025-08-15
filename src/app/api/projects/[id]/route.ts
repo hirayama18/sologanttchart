@@ -7,11 +7,12 @@ import { UpdateProjectRequest, ProjectWithTasksResponse, TaskResponse } from '@/
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { ProjectDAL } = await import('@/dal/projects')
-    const project = await ProjectDAL.getById(params.id)
+    const { id } = await params
+    const project = await ProjectDAL.getById(id)
     
     if (!project) {
       return NextResponse.json(
@@ -55,15 +56,16 @@ export async function GET(
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { ProjectDAL } = await import('@/dal/projects')
+    const { id } = await params
     const body: UpdateProjectRequest = await request.json()
     
     // TODO: Clerk認証実装後に所有者チェックを実装
     // const userId = 'temp-user-id'
-    // const isOwner = await ProjectDAL.isOwner(params.id, userId)
+    // const isOwner = await ProjectDAL.isOwner(id, userId)
     // if (!isOwner) {
     //   return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     // }
@@ -73,7 +75,7 @@ export async function PATCH(
     if (body.startDate) updateData.startDate = new Date(body.startDate)
     if (body.endDate !== undefined) updateData.endDate = body.endDate ? new Date(body.endDate) : null
 
-    const project = await ProjectDAL.update(params.id, updateData)
+    const project = await ProjectDAL.update(id, updateData)
     
     const response: ProjectWithTasksResponse = {
       id: project.id,
@@ -109,18 +111,19 @@ export async function PATCH(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { ProjectDAL } = await import('@/dal/projects')
+    const { id } = await params
     // TODO: Clerk認証実装後に所有者チェックを実装
     // const userId = 'temp-user-id'
-    // const isOwner = await ProjectDAL.isOwner(params.id, userId)
+    // const isOwner = await ProjectDAL.isOwner(id, userId)
     // if (!isOwner) {
     //   return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     // }
 
-    await ProjectDAL.delete(params.id)
+    await ProjectDAL.delete(id)
     
     return NextResponse.json({ message: 'Project deleted successfully' })
   } catch (error) {

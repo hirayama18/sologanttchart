@@ -7,11 +7,12 @@ import { TaskResponse } from '@/lib/types/api'
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { TaskDAL } = await import('@/dal/tasks')
-    const task = await TaskDAL.duplicate(params.id)
+    const { id } = await params
+    const task = await TaskDAL.duplicate(id)
     
     const response: TaskResponse = {
       id: task.id,

@@ -7,11 +7,12 @@ import { UpdateTaskRequest, TaskResponse } from '@/lib/types/api'
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { TaskDAL } = await import('@/dal/tasks')
-    const task = await TaskDAL.getById(params.id)
+    const { id } = await params
+    const task = await TaskDAL.getById(id)
     
     if (!task) {
       return NextResponse.json(
@@ -46,10 +47,11 @@ export async function GET(
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { TaskDAL } = await import('@/dal/tasks')
+    const { id } = await params
     const body: UpdateTaskRequest = await request.json()
     
     const updateData: Partial<{
@@ -70,7 +72,7 @@ export async function PATCH(
     // 本体更新とは分離して直接SQLで更新する（SQLite）。
     const completedAtIso = body.completedAt
 
-    const task = await TaskDAL.update(params.id, updateData)
+    const task = await TaskDAL.update(id, updateData)
 
     if (completedAtIso !== undefined) {
       const dateOrNull = completedAtIso ? new Date(completedAtIso).toISOString() : null
@@ -78,7 +80,7 @@ export async function PATCH(
       await prisma.$executeRawUnsafe(
         'UPDATE tasks SET completedAt = ? WHERE id = ?',
         dateOrNull,
-        params.id
+        id
       )
     }
     
@@ -108,11 +110,12 @@ export async function PATCH(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { TaskDAL } = await import('@/dal/tasks')
-    await TaskDAL.delete(params.id)
+    const { id } = await params
+    await TaskDAL.delete(id)
     
     return NextResponse.json({ message: 'Task deleted successfully' })
   } catch (error) {

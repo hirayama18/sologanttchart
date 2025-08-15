@@ -1,15 +1,17 @@
 import { NextRequest } from 'next/server'
-export const runtime = 'nodejs'
-export const dynamic = 'force-dynamic'
-export const fetchCache = 'force-no-store'
 import { ProjectDAL } from '@/dal/projects'
 import { addDays, format, startOfDay } from 'date-fns'
+import ExcelJS from 'exceljs'
+
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
 
 export async function POST(
   _request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const project = await ProjectDAL.getById(params.id)
+  const { id } = await params
+  const project = await ProjectDAL.getById(id)
   if (!project) {
     return new Response(JSON.stringify({ error: 'Project not found' }), {
       status: 404,
@@ -17,8 +19,6 @@ export async function POST(
     })
   }
 
-  // 動的importでバンドル最適化
-  const ExcelJS = (await import('exceljs')).default
   const workbook = new ExcelJS.Workbook()
   const sheet = workbook.addWorksheet('Gantt')
 
