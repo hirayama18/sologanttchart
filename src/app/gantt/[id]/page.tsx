@@ -107,6 +107,23 @@ export default function GanttPage() {
     setTasks(prevTasks => prevTasks.filter(task => task.id !== taskId))
   }, [])
 
+  // 楽観的UI更新：タスクの並び順を変更
+  const handleTaskReorder = useCallback((newOrderIds: string[]) => {
+    setTasks(prevTasks => {
+      // 新しい順序に基づいてタスクを並び替え
+      const taskMap = new Map(prevTasks.map(task => [task.id, task]))
+      const reorderedTasks = newOrderIds
+        .map(id => taskMap.get(id))
+        .filter((task): task is TaskResponse => task !== undefined)
+        .map((task, index) => ({
+          ...task,
+          order: index + 1 // orderフィールドも更新
+        }))
+      
+      return reorderedTasks
+    })
+  }, [])
+
   // 最適化されたタスク操作フック（新規作成・編集・コピー・削除）
   const { createTask, editTask, duplicateTask, deleteTask } = useOptimizedTaskOperations({
     onLocalTaskAdd: handleTaskAdd,
@@ -283,6 +300,7 @@ export default function GanttPage() {
             onTaskUpdate={handleTaskUpdate}
             onTaskDuplicate={duplicateTask}
             onTaskDelete={deleteTask}
+            onTaskReorder={handleTaskReorder}
             onEditTask={(task) => {
               setEditingTask(task)
               setTaskFormOpen(true)

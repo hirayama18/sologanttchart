@@ -127,9 +127,10 @@ interface GanttChartProps {
   onTaskUpdate?: (taskId: string, updates: Partial<TaskResponse>) => void
   onTaskDuplicate?: (task: TaskResponse) => Promise<TaskResponse | null>
   onTaskDelete?: (task: TaskResponse) => Promise<boolean>
+  onTaskReorder?: (newOrderIds: string[]) => void // 楽観的UI更新用
 }
 
-export function GanttChart({ project, tasks, onTasksChange, onEditTask, onTaskUpdate, onTaskDuplicate, onTaskDelete }: GanttChartProps) {
+export function GanttChart({ project, tasks, onTasksChange, onEditTask, onTaskUpdate, onTaskDuplicate, onTaskDelete, onTaskReorder }: GanttChartProps) {
   // 最適化されたタスク更新フック（デバウンシング + バッチ処理）
   const { updateTask: optimizedUpdateTask, flushPendingUpdates, hasPendingUpdates } = useOptimizedTaskUpdate({
     onLocalUpdate: onTaskUpdate || (() => {}),
@@ -166,6 +167,10 @@ export function GanttChart({ project, tasks, onTasksChange, onEditTask, onTaskUp
   const [dropTargetId, setDropTargetId] = React.useState<string | null>(null)
   const [dropPosition, setDropPosition] = React.useState<'before' | 'after' | null>(null)
   const handleReorder = async (newOrderIds: string[]) => {
+    // 1. 即座にUIを更新（楽観的UI更新）
+    onTaskReorder?.(newOrderIds)
+    
+    // 2. バックグラウンドでAPI呼び出し
     try {
       const res = await fetch('/api/tasks/reorder', {
         method: 'POST',
@@ -173,10 +178,12 @@ export function GanttChart({ project, tasks, onTasksChange, onEditTask, onTaskUp
         body: JSON.stringify({ orderedIds: newOrderIds }),
       })
       if (!res.ok) throw new Error('reorder failed')
-      onTasksChange?.()
+      // API成功時は追加のUIアップデートは不要（既に楽観的に更新済み）
     } catch (e) {
       console.error(e)
-      alert('並び替えの保存に失敗しました')
+      alert('並び替えの保存に失敗しました。ページを再読み込みして最新の状態を確認してください。')
+      // エラー時はデータを再取得してUIを正しい状態に戻す
+      onTasksChange?.()
     }
   }
 
