@@ -125,9 +125,11 @@ interface GanttChartProps {
   onTasksChange?: () => void
   onEditTask?: (task: TaskResponse) => void
   onTaskUpdate?: (taskId: string, updates: Partial<TaskResponse>) => void
+  onTaskDuplicate?: (task: TaskResponse) => Promise<TaskResponse | null>
+  onTaskDelete?: (task: TaskResponse) => Promise<boolean>
 }
 
-export function GanttChart({ project, tasks, onTasksChange, onEditTask, onTaskUpdate }: GanttChartProps) {
+export function GanttChart({ project, tasks, onTasksChange, onEditTask, onTaskUpdate, onTaskDuplicate, onTaskDelete }: GanttChartProps) {
   // 最適化されたタスク更新フック（デバウンシング + バッチ処理）
   const { updateTask: optimizedUpdateTask, flushPendingUpdates, hasPendingUpdates } = useOptimizedTaskUpdate({
     onLocalUpdate: onTaskUpdate || (() => {}),
@@ -496,13 +498,19 @@ export function GanttChart({ project, tasks, onTasksChange, onEditTask, onTaskUp
                       aria-label="タスクをコピー"
                       className="inline-flex items-center justify-center h-7 w-7 rounded-md border border-input bg-background text-gray-700 hover:bg-accent"
                       onClick={async () => {
-                        try {
-                          const res = await fetch(`/api/tasks/${task.id}/duplicate`, { method: 'POST' })
-                          if (!res.ok) throw new Error('failed')
-                          onTasksChange?.()
-                        } catch (e) {
-                          alert('タスクのコピーに失敗しました。')
-                          console.error(e)
+                        if (onTaskDuplicate) {
+                          // 楽観的UI更新を使用（即座にUIが反映される）
+                          await onTaskDuplicate(task)
+                        } else {
+                          // フォールバック：従来の同期的処理
+                          try {
+                            const res = await fetch(`/api/tasks/${task.id}/duplicate`, { method: 'POST' })
+                            if (!res.ok) throw new Error('failed')
+                            onTasksChange?.()
+                          } catch (e) {
+                            alert('タスクのコピーに失敗しました。')
+                            console.error(e)
+                          }
                         }
                       }}
                     >
@@ -513,14 +521,20 @@ export function GanttChart({ project, tasks, onTasksChange, onEditTask, onTaskUp
                     aria-label="タスクを削除"
                     className="inline-flex items-center justify-center h-7 w-7 rounded-md border border-input bg-background text-red-700 hover:bg-red-50"
                     onClick={async () => {
-                      if (!confirm('このタスクを削除しますか？')) return
-                      try {
-                        const res = await fetch(`/api/tasks/${task.id}`, { method: 'DELETE' })
-                        if (!res.ok) throw new Error('failed')
-                        onTasksChange?.()
-                      } catch (e) {
-                        alert('タスクの削除に失敗しました。')
-                        console.error(e)
+                      if (onTaskDelete) {
+                        // 楽観的UI更新を使用（即座にUIが反映される）
+                        await onTaskDelete(task)
+                      } else {
+                        // フォールバック：従来の同期的処理
+                        if (!confirm('このタスクを削除しますか？')) return
+                        try {
+                          const res = await fetch(`/api/tasks/${task.id}`, { method: 'DELETE' })
+                          if (!res.ok) throw new Error('failed')
+                          onTasksChange?.()
+                        } catch (e) {
+                          alert('タスクの削除に失敗しました。')
+                          console.error(e)
+                        }
                       }
                     }}
                   >

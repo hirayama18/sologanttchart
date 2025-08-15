@@ -8,6 +8,7 @@ import { TaskForm } from '@/components/features/tasks/task-form'
 import { Button } from '@/components/ui/button'
 import { ArrowLeft, BarChart3, Plus, Download, Calendar as CalendarIcon } from 'lucide-react'
 import { Input } from '@/components/ui/input'
+import { useOptimizedTaskOperations } from '@/hooks/useOptimizedTaskOperations'
 
 export default function GanttPage() {
   const params = useParams()
@@ -96,13 +97,23 @@ export default function GanttPage() {
     )
   }, [])
 
-  // 最適化されたタスク更新フック（将来の拡張用）
-  // const { updateTask: optimizedPageTaskUpdate, flushPendingUpdates: flushPageUpdates } = useOptimizedTaskUpdate({
-  //   onLocalUpdate: handleTaskUpdate,
-  //   onBatchRefresh: handleTasksChange,
-  //   debounceDelay: 800, // ページレベルは少し長めの遅延
-  //   batchDelay: 400     // バッチ処理も少し長めに設定
-  // })
+  // 楽観的UI更新：新しいタスクをローカル状態に追加
+  const handleTaskAdd = useCallback((task: TaskResponse) => {
+    setTasks(prevTasks => [...prevTasks, task])
+  }, [])
+
+  // 楽観的UI更新：タスクをローカル状態から削除
+  const handleTaskRemove = useCallback((taskId: string) => {
+    setTasks(prevTasks => prevTasks.filter(task => task.id !== taskId))
+  }, [])
+
+  // 最適化されたタスク操作フック（新規作成・編集・コピー・削除）
+  const { createTask, editTask, duplicateTask, deleteTask } = useOptimizedTaskOperations({
+    onLocalTaskAdd: handleTaskAdd,
+    onLocalTaskUpdate: handleTaskUpdate,
+    onLocalTaskRemove: handleTaskRemove,
+    onBatchRefresh: handleTasksChange
+  })
 
   const handleTaskCreated = () => {
     setTaskFormOpen(false)
@@ -270,6 +281,8 @@ export default function GanttPage() {
             tasks={tasks}
             onTasksChange={handleTasksChange}
             onTaskUpdate={handleTaskUpdate}
+            onTaskDuplicate={duplicateTask}
+            onTaskDelete={deleteTask}
             onEditTask={(task) => {
               setEditingTask(task)
               setTaskFormOpen(true)
@@ -294,6 +307,8 @@ export default function GanttPage() {
         }}
         projectId={projectId}
         task={editingTask}
+        optimizedCreateTask={createTask}
+        optimizedEditTask={editTask}
       />
     </div>
   )

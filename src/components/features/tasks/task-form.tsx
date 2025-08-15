@@ -15,9 +15,12 @@ interface TaskFormProps {
   onTaskCreated: (task: TaskResponse) => void
   projectId: string
   task?: TaskResponse // 編集モード用
+  // 最適化された操作関数（楽観的UI更新対応）
+  optimizedCreateTask?: (taskData: CreateTaskRequest) => Promise<TaskResponse | null>
+  optimizedEditTask?: (taskId: string, updates: Partial<TaskResponse>, originalData?: Partial<TaskResponse>) => void
 }
 
-export function TaskForm({ open, onOpenChange, onTaskCreated, projectId, task }: TaskFormProps) {
+export function TaskForm({ open, onOpenChange, onTaskCreated, projectId, task, optimizedCreateTask, optimizedEditTask }: TaskFormProps) {
   const [loading, setLoading] = useState(false)
   const [formData, setFormData] = useState({
     title: '',
@@ -57,31 +60,52 @@ export function TaskForm({ open, onOpenChange, onTaskCreated, projectId, task }:
     setLoading(true)
 
     try {
-      const url = isEditMode ? `/api/tasks/${task.id}` : '/api/tasks'
-      const method = isEditMode ? 'PATCH' : 'POST'
-      
-      const requestData: CreateTaskRequest = {
-        title: formData.title,
-        assignee: formData.assignee,
-        plannedStart: formData.plannedStart,  // YYYY-MM-DD形式で送信
-        plannedEnd: formData.plannedEnd,      // YYYY-MM-DD形式で送信
-        projectId,
-        completedAt: formData.completedAt || null  // 空文字列の場合はnullに変換
-      }
+      if (isEditMode && task && optimizedEditTask) {
+        // 編集モード：楽観的UI更新を使用
+        const updates = {
+          title: formData.title,
+          assignee: formData.assignee,
+          plannedStart: new Date(formData.plannedStart + 'T00:00:00.000Z').toISOString(),
+          plannedEnd: new Date(formData.plannedEnd + 'T00:00:00.000Z').toISOString(),
+          completedAt: formData.completedAt ? new Date(formData.completedAt + 'T00:00:00.000Z').toISOString() : null,
+        }
+        
+        const originalData = {
+          title: task.title,
+          assignee: task.assignee,
+          plannedStart: task.plannedStart,
+          plannedEnd: task.plannedEnd,
+          completedAt: task.completedAt,
+        }
 
-      const response = await fetch(url, {
-        method,
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(requestData)
-      })
-
-      if (response.ok) {
-        const taskResponse: TaskResponse = await response.json()
-        onTaskCreated(taskResponse)
+        // 楽観的UI更新（即座にUIが反映される）
+        optimizedEditTask(task.id, updates, originalData)
+        
+        // 仮のレスポンスを作成してコールバック実行
+        const fakeTaskResponse: TaskResponse = { ...task, ...updates }
+        onTaskCreated(fakeTaskResponse)
         onOpenChange(false)
-        if (!isEditMode) {
+        
+      } else if (!isEditMode && optimizedCreateTask) {
+        // 新規作成モード：楽観的UI更新を使用
+        const requestData: CreateTaskRequest = {
+          title: formData.title,
+          assignee: formData.assignee,
+          plannedStart: formData.plannedStart,  // YYYY-MM-DD形式で送信
+          plannedEnd: formData.plannedEnd,      // YYYY-MM-DD形式で送信
+          projectId,
+          order: 0, // デフォルト値
+          completedAt: formData.completedAt || null
+        }
+
+        // 楽観的UI更新（即座にUIが反映される）
+        const taskResponse = await optimizedCreateTask(requestData)
+        
+        if (taskResponse) {
+          onTaskCreated(taskResponse)
+          onOpenChange(false)
+          
+          // フォームをリセット
           setFormData({
             title: '',
             assignee: TaskAssignee.COMPANY,
@@ -90,9 +114,45 @@ export function TaskForm({ open, onOpenChange, onTaskCreated, projectId, task }:
             completedAt: ''
           })
         }
+        
       } else {
-        console.error('Failed to save task')
-        alert('タスクの保存に失敗しました。')
+        // フォールバック：従来の同期的処理
+        const url = isEditMode ? `/api/tasks/${task!.id}` : '/api/tasks'
+        const method = isEditMode ? 'PATCH' : 'POST'
+        
+        const requestData: CreateTaskRequest = {
+          title: formData.title,
+          assignee: formData.assignee,
+          plannedStart: formData.plannedStart,
+          plannedEnd: formData.plannedEnd,
+          projectId,
+          order: 0,
+          completedAt: formData.completedAt || null
+        }
+
+        const response = await fetch(url, {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(requestData)
+        })
+
+        if (response.ok) {
+          const taskResponse: TaskResponse = await response.json()
+          onTaskCreated(taskResponse)
+          onOpenChange(false)
+          
+          if (!isEditMode) {
+            setFormData({
+              title: '',
+              assignee: TaskAssignee.COMPANY,
+              plannedStart: new Date().toISOString().split('T')[0],
+              plannedEnd: new Date().toISOString().split('T')[0],
+              completedAt: ''
+            })
+          }
+        } else {
+          throw new Error('API request failed')
+        }
       }
     } catch (error) {
       console.error('Error saving task:', error)
