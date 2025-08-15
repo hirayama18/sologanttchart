@@ -1,10 +1,122 @@
 'use client'
 
-import React, { useMemo } from 'react'
+import React, { useMemo, memo, useCallback } from 'react'
 import { Pencil, Trash2, Copy } from 'lucide-react'
 import { TaskResponse, ProjectWithTasksResponse } from '@/lib/types/api'
 import { format, addDays, startOfDay, differenceInCalendarDays, isWeekend } from 'date-fns'
 import { ja } from 'date-fns/locale'
+
+// ドラッグ状態の型定義
+type DragState = {
+  taskId: string
+  type: 'move' | 'resize-left' | 'resize-right'
+  startClientX: number
+  originalStart: Date
+  originalEnd: Date
+  previewStart: Date
+  previewEnd: Date
+} | null
+
+// タスクバーコンポーネントのProps
+interface TaskBarProps {
+  task: TaskResponse
+  visibleDates: Date[]
+  dragState: DragState
+  DAY_WIDTH_PX: number
+  onMouseDown: (event: React.MouseEvent, taskId: string, dragType: 'move' | 'resize-left' | 'resize-right') => void
+  onEditTask?: (task: TaskResponse) => void
+  getAssigneeColor: (assignee: string) => string
+}
+
+// メモ化されたタスクバーコンポーネント
+const TaskBar = memo(({ task, visibleDates, dragState, DAY_WIDTH_PX, onMouseDown, onEditTask, getAssigneeColor }: TaskBarProps) => {
+  // タスクバーのスタイル計算をメモ化
+  const taskBarStyle = useMemo(() => {
+    const visibleStart = visibleDates[0]
+    const visibleEnd = visibleDates[visibleDates.length - 1]
+
+    // すべて日単位に正規化してタイムゾーン起因のズレを排除
+    const baseStart = startOfDay(new Date(task.plannedStart))
+    const baseEnd = startOfDay(new Date(task.plannedEnd))
+
+    // ドラッグ中はプレビューの期間を採用
+    const isDragging = dragState && dragState.taskId === task.id
+    const taskStartDay = isDragging ? dragState.previewStart : baseStart
+    const taskEndDay = isDragging ? dragState.previewEnd : baseEnd
+
+    // 可視範囲内での左端・右端をクリップ
+    const clampedStart = taskStartDay < visibleStart ? visibleStart : taskStartDay
+    const clampedEnd = taskEndDay > visibleEnd ? visibleEnd : taskEndDay
+
+    // 期間が可視範囲と交差しない場合は非表示
+    if (clampedEnd < visibleStart || clampedStart > visibleEnd) return null
+
+    const startOffsetDays = Math.max(0, differenceInCalendarDays(clampedStart, visibleStart))
+    const durationDays = differenceInCalendarDays(clampedEnd, clampedStart) + 1
+
+    const leftPx = startOffsetDays * DAY_WIDTH_PX
+    const widthPx = durationDays * DAY_WIDTH_PX
+
+    return {
+      left: `${leftPx}px`,
+      width: `${Math.max(widthPx, 20)}px`, // 最小幅20px
+      opacity: isDragging ? 0.8 : 1,
+    }
+  }, [task, visibleDates, dragState, DAY_WIDTH_PX])
+
+  if (!taskBarStyle) return null
+
+  const isCompleted = !!task.completedAt
+  const colorClass = isCompleted ? 'bg-gray-400' : getAssigneeColor(task.assignee)
+
+  return (
+    <div
+      className={`flex items-center ${colorClass} text-white text-xs rounded px-2 py-1 cursor-move select-none relative group opacity-80 hover:opacity-100 transition-opacity`}
+      style={{
+        position: 'absolute',
+        ...taskBarStyle,
+        height: '28px',
+        minWidth: '20px',
+      }}
+      title={`${task.title} (${task.assignee})`}
+      onMouseDown={(e) => onMouseDown(e, task.id, 'move')}
+    >
+      {/* 左端リサイズハンドル */}
+      <div
+        className="absolute left-0 top-0 w-2 h-full cursor-w-resize bg-blue-600 opacity-0 group-hover:opacity-100 transition-opacity"
+        onMouseDown={(e) => {
+          e.stopPropagation()
+          onMouseDown(e, task.id, 'resize-left')
+        }}
+      />
+      
+      {/* タスクタイトル */}
+      <span className="flex-1 truncate">{task.title}</span>
+      
+      {/* 右端リサイズハンドル */}
+      <div
+        className="absolute right-0 top-0 w-2 h-full cursor-e-resize bg-blue-600 opacity-0 group-hover:opacity-100 transition-opacity"
+        onMouseDown={(e) => {
+          e.stopPropagation()
+          onMouseDown(e, task.id, 'resize-right')
+        }}
+      />
+      
+      {/* 編集ボタン */}
+      <button
+        className="ml-1 opacity-0 group-hover:opacity-100 transition-opacity"
+        onClick={(e) => {
+          e.stopPropagation()
+          onEditTask?.(task)
+        }}
+      >
+        <Pencil className="h-3 w-3" />
+      </button>
+    </div>
+  )
+})
+
+TaskBar.displayName = 'TaskBar'
 
 interface GanttChartProps {
   project: ProjectWithTasksResponse
@@ -31,24 +143,12 @@ export function GanttChart({ project, tasks, onTasksChange, onEditTask, onTaskUp
     return dates
   }, [projectStartDay, project.endDate])
 
-  // 1日あたりの描画幅（px）
-  const DAY_WIDTH_PX = 32
-  const timelineWidthPx = visibleDates.length * DAY_WIDTH_PX
+  // 1日あたりの描画幅（px）- メモ化
+  const DAY_WIDTH_PX = useMemo(() => 32, [])
+  const timelineWidthPx = useMemo(() => visibleDates.length * DAY_WIDTH_PX, [visibleDates.length, DAY_WIDTH_PX])
 
   // ドラッグ状態
-  type DragType = 'move' | 'resize-left' | 'resize-right'
-  const [dragState, setDragState] = React.useState<
-    | {
-        taskId: string
-        type: DragType
-        startClientX: number
-        originalStart: Date
-        originalEnd: Date
-        previewStart: Date
-        previewEnd: Date
-      }
-    | null
-  >(null)
+  const [dragState, setDragState] = React.useState<DragState>(null)
 
   // 左側タスクリストの並び替え（ドラッグ&ドロップ）
   const [dragTaskId, setDragTaskId] = React.useState<string | null>(null)
@@ -84,8 +184,28 @@ export function GanttChart({ project, tasks, onTasksChange, onEditTask, onTaskUp
       : addDays(projectStartDay, 6 * 30 - 1)
   }, [project.endDate, projectStartDay])
 
-  const pxToDays = (px: number) => Math.round(px / DAY_WIDTH_PX)
-  const addDaysSafe = (date: Date, days: number) => startOfDay(addDays(date, days))
+  const pxToDays = useCallback((px: number) => Math.round(px / DAY_WIDTH_PX), [DAY_WIDTH_PX])
+  const addDaysSafe = useCallback((date: Date, days: number) => startOfDay(addDays(date, days)), [])
+
+  // メモ化されたマウスダウンハンドラー
+  const handleMouseDown = useCallback((event: React.MouseEvent, taskId: string, dragType: 'move' | 'resize-left' | 'resize-right') => {
+    event.preventDefault()
+    document.body.style.cursor = dragType === 'move' ? 'grabbing' : 'ew-resize'
+    document.body.style.userSelect = 'none'
+    
+    const task = tasks.find(t => t.id === taskId)
+    if (!task) return
+    
+    setDragState({
+      taskId,
+      type: dragType,
+      startClientX: event.clientX,
+      originalStart: startOfDay(new Date(task.plannedStart)),
+      originalEnd: startOfDay(new Date(task.plannedEnd)),
+      previewStart: startOfDay(new Date(task.plannedStart)),
+      previewEnd: startOfDay(new Date(task.plannedEnd)),
+    })
+  }, [tasks])
 
   React.useEffect(() => {
     if (!dragState) return
@@ -179,7 +299,7 @@ export function GanttChart({ project, tasks, onTasksChange, onEditTask, onTaskUp
       document.removeEventListener('mousemove', handleMove)
       document.removeEventListener('mouseup', handleUp)
     }
-  }, [dragState, onTasksChange, onTaskUpdate, visibleDates, clampToVisible])
+  }, [dragState, onTasksChange, onTaskUpdate, visibleDates, clampToVisible, addDaysSafe, pxToDays])
 
   // 月ごとのセグメントを作成（上段にまとめて表示）
   const monthSegments = useMemo(() => {
@@ -209,38 +329,8 @@ export function GanttChart({ project, tasks, onTasksChange, onEditTask, onTaskUp
     return segments
   }, [visibleDates])
 
-  // タスクバーの位置とサイズを計算
-  const getTaskBarStyle = (task: TaskResponse) => {
-    const visibleStart = visibleDates[0]
-    const visibleEnd = visibleDates[visibleDates.length - 1]
-
-    // すべて日単位に正規化してタイムゾーン起因のズレを排除
-    const baseStart = startOfDay(new Date(task.plannedStart))
-    const baseEnd = startOfDay(new Date(task.plannedEnd))
-
-    // ドラッグ中はプレビューの期間を採用
-    const isDragging = dragState && dragState.taskId === task.id
-    const taskStartDay = isDragging ? dragState!.previewStart : baseStart
-    const taskEndDay = isDragging ? dragState!.previewEnd : baseEnd
-
-    // 可視範囲内での左端・右端をクリップ
-    const clampedStart = taskStartDay < visibleStart ? visibleStart : taskStartDay
-    const clampedEnd = taskEndDay > visibleEnd ? visibleEnd : taskEndDay
-
-    // 期間が可視範囲と交差しない場合は非表示
-    if (clampedEnd < visibleStart || clampedStart > visibleEnd) return null
-
-    const startOffsetDays = Math.max(0, differenceInCalendarDays(clampedStart, visibleStart))
-    const durationDays = differenceInCalendarDays(clampedEnd, clampedStart) + 1
-
-    return {
-      left: `${startOffsetDays * DAY_WIDTH_PX}px`,
-      width: `${durationDays * DAY_WIDTH_PX}px`,
-    }
-  }
-
-  // 担当者別の色を取得
-  const getAssigneeColor = (assignee: string) => {
+  // 担当者別の色を取得（TaskBarコンポーネント用）
+  const getAssigneeColor = useCallback((assignee: string) => {
     switch (assignee) {
       case '弊社': return 'bg-blue-500'
       case 'お客様': return 'bg-green-500'
@@ -248,7 +338,7 @@ export function GanttChart({ project, tasks, onTasksChange, onEditTask, onTaskUp
       case 'その他': return 'bg-gray-500'
       default: return 'bg-gray-500'
     }
-  }
+  }, [])
 
   // 今日の日付
   const today = startOfDay(new Date())
@@ -488,76 +578,19 @@ export function GanttChart({ project, tasks, onTasksChange, onEditTask, onTaskUp
               />
             )}
             
-            {tasks.map((task) => {
-              const style = getTaskBarStyle(task)
-              if (!style) return null
-
-              const isCompleted = !!task.completedAt
-              return (
-                <div key={task.id} className="h-12 border-b relative">
-                  <div
-                    className={`absolute top-1 bottom-1 rounded ${isCompleted ? 'bg-gray-400' : getAssigneeColor(task.assignee)} opacity-80 hover:opacity-100 transition-opacity`}
-                    style={style}
-                    title={`${task.title} (${task.assignee})`}
-                    onMouseDown={(e) => {
-                      // バー本体のドラッグ（移動）
-                      if ((e.target as HTMLElement).dataset.handle) return
-                      e.preventDefault()
-                      document.body.style.cursor = 'grabbing'
-                      document.body.style.userSelect = 'none'
-                      setDragState({
-                        taskId: task.id,
-                        type: 'move',
-                        startClientX: e.clientX,
-                        originalStart: startOfDay(new Date(task.plannedStart)),
-                        originalEnd: startOfDay(new Date(task.plannedEnd)),
-                        previewStart: startOfDay(new Date(task.plannedStart)),
-                        previewEnd: startOfDay(new Date(task.plannedEnd)),
-                      })
-                    }}
-                  >
-                    {/* 左右リサイズハンドル */}
-                    <div
-                      data-handle
-                      className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize"
-                      onMouseDown={(e) => {
-                        e.stopPropagation()
-                        document.body.style.cursor = 'ew-resize'
-                        document.body.style.userSelect = 'none'
-                        setDragState({
-                          taskId: task.id,
-                          type: 'resize-left',
-                          startClientX: e.clientX,
-                          originalStart: startOfDay(new Date(task.plannedStart)),
-                          originalEnd: startOfDay(new Date(task.plannedEnd)),
-                          previewStart: startOfDay(new Date(task.plannedStart)),
-                          previewEnd: startOfDay(new Date(task.plannedEnd)),
-                        })
-                      }}
-                    />
-                    <div className="p-1 text-white text-xs truncate pointer-events-none">{task.title}</div>
-                    <div
-                      data-handle
-                      className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize"
-                      onMouseDown={(e) => {
-                        e.stopPropagation()
-                        document.body.style.cursor = 'ew-resize'
-                        document.body.style.userSelect = 'none'
-                        setDragState({
-                          taskId: task.id,
-                          type: 'resize-right',
-                          startClientX: e.clientX,
-                          originalStart: startOfDay(new Date(task.plannedStart)),
-                          originalEnd: startOfDay(new Date(task.plannedEnd)),
-                          previewStart: startOfDay(new Date(task.plannedStart)),
-                          previewEnd: startOfDay(new Date(task.plannedEnd)),
-                        })
-                      }}
-                    />
-                  </div>
-                </div>
-              )
-            })}
+            {tasks.map((task) => (
+              <div key={task.id} className="h-12 border-b relative">
+                <TaskBar
+                  task={task}
+                  visibleDates={visibleDates}
+                  dragState={dragState}
+                  DAY_WIDTH_PX={DAY_WIDTH_PX}
+                  onMouseDown={handleMouseDown}
+                  onEditTask={onEditTask}
+                  getAssigneeColor={getAssigneeColor}
+                />
+              </div>
+            ))}
             
             {tasks.length === 0 && (
               <div className="h-32 flex items-center justify-center text-gray-500">
