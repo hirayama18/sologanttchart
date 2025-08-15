@@ -263,7 +263,13 @@ export default function GanttPage() {
       {/* タスク作成フォーム */}
       <TaskForm
         open={taskFormOpen}
-        onOpenChange={setTaskFormOpen}
+        onOpenChange={(open) => {
+          setTaskFormOpen(open)
+          if (!open) {
+            // モーダルを閉じるときに編集状態をリセット
+            setEditingTask(undefined)
+          }
+        }}
         onTaskCreated={() => {
           setEditingTask(undefined)
           handleTaskCreated()

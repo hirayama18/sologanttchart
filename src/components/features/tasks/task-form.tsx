@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -20,13 +20,34 @@ interface TaskFormProps {
 export function TaskForm({ open, onOpenChange, onTaskCreated, projectId, task }: TaskFormProps) {
   const [loading, setLoading] = useState(false)
   const [formData, setFormData] = useState({
-    title: task?.title || '',
-    assignee: task?.assignee || TaskAssignee.COMPANY,
-    plannedStart: task?.plannedStart ? new Date(task.plannedStart).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-    plannedEnd: task?.plannedEnd ? new Date(task.plannedEnd).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]
+    title: '',
+    assignee: TaskAssignee.COMPANY,
+    plannedStart: new Date().toISOString().split('T')[0],
+    plannedEnd: new Date().toISOString().split('T')[0]
   })
 
   const isEditMode = !!task
+
+  // taskが変更されたときにフォームデータを更新
+  useEffect(() => {
+    if (task) {
+      // 編集モード: タスクの現在値を設定
+      setFormData({
+        title: task.title,
+        assignee: task.assignee as TaskAssignee,
+        plannedStart: new Date(task.plannedStart).toISOString().split('T')[0],
+        plannedEnd: new Date(task.plannedEnd).toISOString().split('T')[0]
+      })
+    } else {
+      // 新規作成モード: 初期値を設定
+      setFormData({
+        title: '',
+        assignee: TaskAssignee.COMPANY,
+        plannedStart: new Date().toISOString().split('T')[0],
+        plannedEnd: new Date().toISOString().split('T')[0]
+      })
+    }
+  }, [task])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
