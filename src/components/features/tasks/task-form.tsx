@@ -20,7 +20,8 @@ interface TaskFormProps {
   optimizedEditTask?: (taskId: string, uiUpdates: Partial<TaskResponse>, originalData?: Partial<TaskResponse>, apiUpdates?: Partial<CreateTaskRequest>) => void
 }
 
-export function TaskForm({ open, onOpenChange, onTaskCreated, projectId, task, optimizedCreateTask, optimizedEditTask }: TaskFormProps) {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export function TaskForm({ open, onOpenChange, onTaskCreated, projectId, task, optimizedCreateTask, optimizedEditTask: _ }: TaskFormProps) {
   const [loading, setLoading] = useState(false)
   const [formData, setFormData] = useState({
     title: '',
@@ -60,41 +61,9 @@ export function TaskForm({ open, onOpenChange, onTaskCreated, projectId, task, o
     setLoading(true)
 
     try {
-      if (isEditMode && task && optimizedEditTask) {
-        // 編集モード：楽観的UI更新を使用
-        // UI更新用データ（ISO形式）
-        const uiUpdates = {
-          title: formData.title,
-          assignee: formData.assignee,
-          plannedStart: new Date(formData.plannedStart + 'T00:00:00.000Z').toISOString(),
-          plannedEnd: new Date(formData.plannedEnd + 'T00:00:00.000Z').toISOString(),
-          completedAt: formData.completedAt ? new Date(formData.completedAt + 'T00:00:00.000Z').toISOString() : null,
-        }
-        
-        // API用データ（YYYY-MM-DD形式）
-        const apiUpdates = {
-          title: formData.title,
-          assignee: formData.assignee,
-          plannedStart: formData.plannedStart,  // YYYY-MM-DD形式
-          plannedEnd: formData.plannedEnd,      // YYYY-MM-DD形式
-          completedAt: formData.completedAt || null,
-        }
-        
-        const originalData = {
-          title: task.title,
-          assignee: task.assignee,
-          plannedStart: task.plannedStart,
-          plannedEnd: task.plannedEnd,
-          completedAt: task.completedAt,
-        }
-
-        // 楽観的UI更新（UI用データとAPI用データを分離して渡す）
-        optimizedEditTask(task.id, uiUpdates, originalData, apiUpdates)
-        
-        // 仮のレスポンスを作成してコールバック実行
-        const fakeTaskResponse: TaskResponse = { ...task, ...uiUpdates }
-        onTaskCreated(fakeTaskResponse)
-        onOpenChange(false)
+      if (false) { // 一時的に楽観的UI更新を無効化
+        // 楽観的UI更新処理（現在無効化中）
+        console.log('楽観的UI更新は一時的に無効化されています')
         
       } else if (!isEditMode && optimizedCreateTask) {
         // 新規作成モード：楽観的UI更新を使用
@@ -128,7 +97,7 @@ export function TaskForm({ open, onOpenChange, onTaskCreated, projectId, task, o
         
       } else {
         // フォールバック：従来の同期的処理
-        const url = isEditMode ? `/api/tasks/${task!.id}` : '/api/tasks'
+        const url = isEditMode && task ? `/api/tasks/${task.id}` : '/api/tasks'
         const method = isEditMode ? 'PATCH' : 'POST'
         
         const requestData: CreateTaskRequest = {

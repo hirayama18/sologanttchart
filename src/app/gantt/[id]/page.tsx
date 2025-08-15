@@ -29,9 +29,17 @@ export default function GanttPage() {
 
   const fetchProject = useCallback(async () => {
     try {
-      const response = await fetch(`/api/projects/${projectId}`)
+      const response = await fetch(`/api/projects/${projectId}`, {
+        cache: 'no-store', // キャッシュを無効化
+        headers: {
+          'Cache-Control': 'no-cache'
+        }
+      })
       if (response.ok) {
         const projectData: ProjectWithTasksResponse = await response.json()
+        // デバッグ用ログ
+        console.log('Frontend - Project data received:', projectData)
+        console.log('Frontend - Tasks with completedAt:', projectData.tasks.filter(task => task.completedAt))
         setProject(projectData)
         setTasks(projectData.tasks)
       } else {

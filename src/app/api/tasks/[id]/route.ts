@@ -81,6 +81,13 @@ export async function PATCH(
     const task = await TaskDAL.update(id, updateData)
 
     let finalCompletedAt: string | null = null
+    console.log('Task update API - completedAt processing:', {
+      taskId: id,
+      completedAtIso,
+      completedAtUndefined: completedAtIso === undefined,
+      originalCompletedAt: task.completedAt
+    })
+    
     if (completedAtIso !== undefined) {
       let dateOrNull: Date | null = null
       if (completedAtIso) {
@@ -90,6 +97,13 @@ export async function PATCH(
           : completedAtIso + 'T00:00:00.000Z'
         dateOrNull = new Date(dateString)
         finalCompletedAt = dateOrNull.toISOString()
+        console.log('Task update API - Setting completedAt:', {
+          dateString,
+          dateOrNull,
+          finalCompletedAt
+        })
+      } else {
+        console.log('Task update API - Clearing completedAt')
       }
       const { prisma } = await import('@/lib/prisma')
       await prisma.task.update({
@@ -99,6 +113,7 @@ export async function PATCH(
     } else {
       // completedAtが更新されない場合は元の値を使用
       finalCompletedAt = task.completedAt ? task.completedAt.toISOString() : null
+      console.log('Task update API - Using original completedAt:', finalCompletedAt)
     }
     
     const response: TaskResponse = {

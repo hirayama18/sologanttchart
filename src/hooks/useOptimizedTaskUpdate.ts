@@ -95,6 +95,14 @@ export function useOptimizedTaskUpdate({
     updates: Partial<TaskResponse>,
     originalData?: Partial<TaskResponse>
   ) => {
+    // デバッグ用ログ
+    console.log('OptimizedTaskUpdate - updateTask called:', {
+      taskId,
+      updates,
+      originalData,
+      completedAtUpdate: updates.completedAt
+    })
+    
     // 1. 即座にローカル状態を更新（楽観的UI更新）
     onLocalUpdate(taskId, updates)
 

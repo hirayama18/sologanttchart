@@ -29,19 +29,30 @@ export async function GET(
       userId: project.userId,
       createdAt: project.createdAt.toISOString(),
       updatedAt: project.updatedAt.toISOString(),
-        tasks: project.tasks.map(task => ({
-        id: task.id,
-        title: task.title,
-        assignee: task.assignee,
-        plannedStart: task.plannedStart.toISOString(),
-        plannedEnd: task.plannedEnd.toISOString(),
-        order: task.order,
-        deleted: task.deleted,
-        projectId: task.projectId,
-        createdAt: task.createdAt.toISOString(),
-          updatedAt: task.updatedAt.toISOString(),
-          completedAt: task.completedAt ? task.completedAt.toISOString() : null
-      } as TaskResponse))
+        tasks: project.tasks.map(task => {
+          const completedAtValue = task.completedAt ? task.completedAt.toISOString() : null
+          // デバッグ用ログ
+          console.log('Project API - Task:', {
+            id: task.id,
+            title: task.title,
+            completedAt: task.completedAt,
+            completedAtValue,
+            completedAtType: typeof task.completedAt
+          })
+          return {
+            id: task.id,
+            title: task.title,
+            assignee: task.assignee,
+            plannedStart: task.plannedStart.toISOString(),
+            plannedEnd: task.plannedEnd.toISOString(),
+            order: task.order,
+            deleted: task.deleted,
+            projectId: task.projectId,
+            createdAt: task.createdAt.toISOString(),
+            updatedAt: task.updatedAt.toISOString(),
+            completedAt: completedAtValue
+          } as TaskResponse
+        })
     }
 
     return NextResponse.json(response)

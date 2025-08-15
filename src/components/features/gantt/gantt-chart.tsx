@@ -70,16 +70,16 @@ const TaskBar = memo(({ task, visibleDates, dragState, DAY_WIDTH_PX, onMouseDown
   const isCompleted = !!task.completedAt
   const colorClass = isCompleted ? 'bg-gray-400' : getAssigneeColor(task.assignee)
   
-  // デバッグ用: 完了タスクの情報をログ出力
-  if (task.completedAt) {
-    console.log('Completed task detected:', {
-      id: task.id,
-      title: task.title,
-      completedAt: task.completedAt,
-      isCompleted,
-      colorClass
-    })
-  }
+  // デバッグ用: すべてのタスクの情報をログ出力
+  console.log('Task rendering:', {
+    id: task.id,
+    title: task.title,
+    completedAt: task.completedAt,
+    completedAtType: typeof task.completedAt,
+    isCompleted,
+    colorClass,
+    hasCompletedAt: !!task.completedAt
+  })
 
   return (
     <div
