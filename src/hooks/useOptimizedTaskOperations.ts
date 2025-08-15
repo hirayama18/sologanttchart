@@ -87,10 +87,19 @@ export function useOptimizedTaskOperations({
   }, [onLocalTaskAdd, onLocalTaskRemove, onBatchRefresh])
 
   // タスク編集（楽観的UI更新）
-  const editTask = useCallback((taskId: string, updates: Partial<TaskResponse>, originalData?: Partial<TaskResponse>) => {
-    // 最適化された更新処理を使用
-    optimizedUpdateTask(taskId, updates, originalData)
-  }, [optimizedUpdateTask])
+  const editTask = useCallback((
+    taskId: string, 
+    uiUpdates: Partial<TaskResponse>, 
+    originalData?: Partial<TaskResponse>, 
+    apiUpdates?: Partial<CreateTaskRequest>
+  ) => {
+    // UI更新は即座に実行
+    onLocalTaskUpdate(taskId, uiUpdates)
+    
+    // API更新は最適化された処理を使用（apiUpdatesがある場合はそれを使用、なければuiUpdatesを使用）
+    const updatesForApi = apiUpdates || uiUpdates
+    optimizedUpdateTask(taskId, updatesForApi, originalData)
+  }, [optimizedUpdateTask, onLocalTaskUpdate])
 
   // タスクコピー（楽観的UI更新）
   const duplicateTask = useCallback(async (originalTask: TaskResponse): Promise<TaskResponse | null> => {

@@ -316,7 +316,13 @@ export function GanttChart({ project, tasks, onTasksChange, onEditTask, onTaskUp
       document.body.style.userSelect = ''
       
       // 最適化されたタスク更新（デバウンシング + バッチ処理 + 楽観的UI）
-      optimizedUpdateTask(taskId, { ...uiUpdateData, ...apiUpdateData }, originalData)
+      // UI更新は即座に実行
+      if (onTaskUpdate) {
+        onTaskUpdate(taskId, uiUpdateData)
+      }
+      
+      // API更新はデバウンシング処理を使用
+      optimizedUpdateTask(taskId, apiUpdateData, originalData)
     }
 
     document.addEventListener('mousemove', handleMove)

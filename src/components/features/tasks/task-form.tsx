@@ -17,7 +17,7 @@ interface TaskFormProps {
   task?: TaskResponse // 編集モード用
   // 最適化された操作関数（楽観的UI更新対応）
   optimizedCreateTask?: (taskData: CreateTaskRequest) => Promise<TaskResponse | null>
-  optimizedEditTask?: (taskId: string, updates: Partial<TaskResponse>, originalData?: Partial<TaskResponse>) => void
+  optimizedEditTask?: (taskId: string, uiUpdates: Partial<TaskResponse>, originalData?: Partial<TaskResponse>, apiUpdates?: Partial<CreateTaskRequest>) => void
 }
 
 export function TaskForm({ open, onOpenChange, onTaskCreated, projectId, task, optimizedCreateTask, optimizedEditTask }: TaskFormProps) {
@@ -62,12 +62,22 @@ export function TaskForm({ open, onOpenChange, onTaskCreated, projectId, task, o
     try {
       if (isEditMode && task && optimizedEditTask) {
         // 編集モード：楽観的UI更新を使用
-        const updates = {
+        // UI更新用データ（ISO形式）
+        const uiUpdates = {
           title: formData.title,
           assignee: formData.assignee,
           plannedStart: new Date(formData.plannedStart + 'T00:00:00.000Z').toISOString(),
           plannedEnd: new Date(formData.plannedEnd + 'T00:00:00.000Z').toISOString(),
           completedAt: formData.completedAt ? new Date(formData.completedAt + 'T00:00:00.000Z').toISOString() : null,
+        }
+        
+        // API用データ（YYYY-MM-DD形式）
+        const apiUpdates = {
+          title: formData.title,
+          assignee: formData.assignee,
+          plannedStart: formData.plannedStart,  // YYYY-MM-DD形式
+          plannedEnd: formData.plannedEnd,      // YYYY-MM-DD形式
+          completedAt: formData.completedAt || null,
         }
         
         const originalData = {
@@ -78,11 +88,11 @@ export function TaskForm({ open, onOpenChange, onTaskCreated, projectId, task, o
           completedAt: task.completedAt,
         }
 
-        // 楽観的UI更新（即座にUIが反映される）
-        optimizedEditTask(task.id, updates, originalData)
+        // 楽観的UI更新（UI用データとAPI用データを分離して渡す）
+        optimizedEditTask(task.id, uiUpdates, originalData, apiUpdates)
         
         // 仮のレスポンスを作成してコールバック実行
-        const fakeTaskResponse: TaskResponse = { ...task, ...updates }
+        const fakeTaskResponse: TaskResponse = { ...task, ...uiUpdates }
         onTaskCreated(fakeTaskResponse)
         onOpenChange(false)
         
