@@ -49,41 +49,43 @@ export function useOptimizedTaskOperations({
     }
 
     // 3. 即座にUIに仮タスクを追加
-    onLocalTaskAdd(optimisticTask)
+    onLocalTaskAdd(optimisticTask);
+    
+    // 4. バックグラウンドでAPI呼び出し（非同期・非ブロッキング）
+    (async () => {
+      try {
+        const response = await fetch('/api/tasks', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(taskData)
+        })
 
-    try {
-      // 4. バックグラウンドでAPI呼び出し
-      const response = await fetch('/api/tasks', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(taskData)
-      })
+        if (!response.ok) {
+          throw new Error(`API request failed: ${response.status}`)
+        }
 
-      if (!response.ok) {
-        throw new Error(`API request failed: ${response.status}`)
+        const realTask: TaskResponse = await response.json()
+
+        // 成功時：仮タスクを実際のタスクで置換
+        onLocalTaskRemove(tempId) // 仮タスクを削除
+        onLocalTaskAdd(realTask)   // 実際のタスクを追加
+
+      } catch (error) {
+        console.error('Failed to create task:', error)
+        
+        // 失敗時：仮タスクを削除してロールバック
+        onLocalTaskRemove(tempId)
+        
+        // エラー通知
+        alert('タスクの作成に失敗しました。')
+        
+        // フォールバック：全データ再取得
+        onBatchRefresh?.()
       }
+    })()
 
-      const realTask: TaskResponse = await response.json()
-
-      // 5. 成功時：仮タスクを実際のタスクで置換
-      onLocalTaskRemove(tempId) // 仮タスクを削除
-      onLocalTaskAdd(realTask)   // 実際のタスクを追加
-
-      return realTask
-    } catch (error) {
-      console.error('Failed to create task:', error)
-      
-      // 6. 失敗時：仮タスクを削除してロールバック
-      onLocalTaskRemove(tempId)
-      
-      // エラー通知
-      alert('タスクの作成に失敗しました。')
-      
-      // フォールバック：全データ再取得
-      onBatchRefresh?.()
-      
-      return null
-    }
+    // 5. 即座に仮タスクを返す（呼び出し元が即座に処理を続行できる）
+    return optimisticTask
   }, [onLocalTaskAdd, onLocalTaskRemove, onBatchRefresh])
 
   // タスク編集（楽観的UI更新）

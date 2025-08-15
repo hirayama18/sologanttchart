@@ -108,10 +108,11 @@ export function TaskForm({ open, onOpenChange, onTaskCreated, projectId, task, o
           completedAt: formData.completedAt || null
         }
 
-        // 楽観的UI更新（即座にUIが反映される）
+        // 楽観的UI更新（即座に仮タスクが返される）
         const taskResponse = await optimizedCreateTask(requestData)
         
         if (taskResponse) {
+          // 即座にコールバック実行とモーダル非表示
           onTaskCreated(taskResponse)
           onOpenChange(false)
           
