@@ -23,7 +23,8 @@ export function TaskForm({ open, onOpenChange, onTaskCreated, projectId, task }:
     title: '',
     assignee: TaskAssignee.COMPANY,
     plannedStart: new Date().toISOString().split('T')[0],
-    plannedEnd: new Date().toISOString().split('T')[0]
+    plannedEnd: new Date().toISOString().split('T')[0],
+    completedAt: ''  // 空文字列は未完了を表す
   })
 
   const isEditMode = !!task
@@ -36,7 +37,8 @@ export function TaskForm({ open, onOpenChange, onTaskCreated, projectId, task }:
         title: task.title,
         assignee: task.assignee as TaskAssignee,
         plannedStart: new Date(task.plannedStart).toISOString().split('T')[0],
-        plannedEnd: new Date(task.plannedEnd).toISOString().split('T')[0]
+        plannedEnd: new Date(task.plannedEnd).toISOString().split('T')[0],
+        completedAt: task.completedAt ? new Date(task.completedAt).toISOString().split('T')[0] : ''
       })
     } else {
       // 新規作成モード: 初期値を設定
@@ -44,7 +46,8 @@ export function TaskForm({ open, onOpenChange, onTaskCreated, projectId, task }:
         title: '',
         assignee: TaskAssignee.COMPANY,
         plannedStart: new Date().toISOString().split('T')[0],
-        plannedEnd: new Date().toISOString().split('T')[0]
+        plannedEnd: new Date().toISOString().split('T')[0],
+        completedAt: ''
       })
     }
   }, [task])
@@ -62,7 +65,8 @@ export function TaskForm({ open, onOpenChange, onTaskCreated, projectId, task }:
         assignee: formData.assignee,
         plannedStart: formData.plannedStart,  // YYYY-MM-DD形式で送信
         plannedEnd: formData.plannedEnd,      // YYYY-MM-DD形式で送信
-        projectId
+        projectId,
+        completedAt: formData.completedAt || null  // 空文字列の場合はnullに変換
       }
 
       const response = await fetch(url, {
@@ -82,7 +86,8 @@ export function TaskForm({ open, onOpenChange, onTaskCreated, projectId, task }:
             title: '',
             assignee: TaskAssignee.COMPANY,
             plannedStart: new Date().toISOString().split('T')[0],
-            plannedEnd: new Date().toISOString().split('T')[0]
+            plannedEnd: new Date().toISOString().split('T')[0],
+            completedAt: ''
           })
         }
       } else {
@@ -176,6 +181,20 @@ export function TaskForm({ open, onOpenChange, onTaskCreated, projectId, task }:
                 onChange={(e) => handleInputChange('plannedEnd', e.target.value)}
                 className="col-span-3"
                 required
+              />
+            </div>
+            
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="completedAt" className="text-right">
+                完了日
+              </Label>
+              <Input
+                id="completedAt"
+                type="date"
+                value={formData.completedAt}
+                onChange={(e) => handleInputChange('completedAt', e.target.value)}
+                className="col-span-3"
+                placeholder="未完了の場合は空欄"
               />
             </div>
           </div>
