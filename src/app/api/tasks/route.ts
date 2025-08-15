@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
         completedAtValue = new Date(dateString).toISOString()
       }
       await prisma.$executeRawUnsafe(
-        'UPDATE tasks SET completedAt = ? WHERE id = ?',
+        'UPDATE tasks SET "completedAt" = $1 WHERE id = $2',
         completedAtValue,
         task.id
       )

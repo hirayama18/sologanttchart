@@ -91,7 +91,7 @@ export async function PATCH(
       }
       const { prisma } = await import('@/lib/prisma')
       await prisma.$executeRawUnsafe(
-        'UPDATE tasks SET completedAt = ? WHERE id = ?',
+        'UPDATE tasks SET "completedAt" = $1 WHERE id = $2',
         dateOrNull,
         id
       )
