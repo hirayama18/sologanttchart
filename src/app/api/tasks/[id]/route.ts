@@ -81,20 +81,19 @@ export async function PATCH(
     const task = await TaskDAL.update(id, updateData)
 
     if (completedAtIso !== undefined) {
-      let dateOrNull = null
+      let dateOrNull: Date | null = null
       if (completedAtIso) {
         // YYYY-MM-DD形式の場合はT00:00:00.000Zを追加
         const dateString = completedAtIso.includes('T') 
           ? completedAtIso 
           : completedAtIso + 'T00:00:00.000Z'
-        dateOrNull = new Date(dateString).toISOString()
+        dateOrNull = new Date(dateString)
       }
       const { prisma } = await import('@/lib/prisma')
-      await prisma.$executeRawUnsafe(
-        'UPDATE tasks SET "completedAt" = $1 WHERE id = $2',
-        dateOrNull,
-        id
-      )
+      await prisma.task.update({
+        where: { id },
+        data: { completedAt: dateOrNull }
+      })
     }
     
     const response: TaskResponse = {

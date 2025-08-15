@@ -21,22 +21,23 @@ export async function POST(request: NextRequest) {
 
     const task = await TaskDAL.create(taskData)
 
-    // completedAt を直接反映（Prisma クライアントの差異に備え raw を併用）
-    let completedAtValue = null
+    // completedAt を直接反映（Prismaの型安全なクエリを使用）
+    let completedAtValue: string | null = null
     if (body.completedAt !== undefined) {
       const { prisma } = await import('@/lib/prisma')
+      let dateOrNull: Date | null = null
       if (body.completedAt) {
         // YYYY-MM-DD形式の場合はT00:00:00.000Zを追加
         const dateString = body.completedAt.includes('T') 
           ? body.completedAt 
           : body.completedAt + 'T00:00:00.000Z'
-        completedAtValue = new Date(dateString).toISOString()
+        dateOrNull = new Date(dateString)
+        completedAtValue = dateOrNull.toISOString()
       }
-      await prisma.$executeRawUnsafe(
-        'UPDATE tasks SET "completedAt" = $1 WHERE id = $2',
-        completedAtValue,
-        task.id
-      )
+      await prisma.task.update({
+        where: { id: task.id },
+        data: { completedAt: dateOrNull }
+      })
     }
     
     const response: TaskResponse = {
