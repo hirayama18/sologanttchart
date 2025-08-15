@@ -125,9 +125,10 @@ export function GanttChart({ project, tasks, onTasksChange, onEditTask }: GanttC
     const handleUp = async () => {
       if (!dragState) return
       try {
+        // 日付のみ（YYYY-MM-DD）で送信してタイムゾーン問題を回避
         const body = {
-          plannedStart: dragState.previewStart.toISOString(),
-          plannedEnd: dragState.previewEnd.toISOString(),
+          plannedStart: format(dragState.previewStart, 'yyyy-MM-dd'),
+          plannedEnd: format(dragState.previewEnd, 'yyyy-MM-dd'),
         }
         await fetch(`/api/tasks/${dragState.taskId}`, {
           method: 'PATCH',

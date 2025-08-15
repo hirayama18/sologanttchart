@@ -64,8 +64,14 @@ export async function PATCH(
     
     if (body.title) updateData.title = body.title
     if (body.assignee) updateData.assignee = body.assignee
-    if (body.plannedStart) updateData.plannedStart = new Date(body.plannedStart)
-    if (body.plannedEnd) updateData.plannedEnd = new Date(body.plannedEnd)
+    if (body.plannedStart) {
+      // YYYY-MM-DD形式の文字列をUTC 00:00:00として処理
+      updateData.plannedStart = new Date(body.plannedStart + 'T00:00:00.000Z')
+    }
+    if (body.plannedEnd) {
+      // YYYY-MM-DD形式の文字列をUTC 00:00:00として処理
+      updateData.plannedEnd = new Date(body.plannedEnd + 'T00:00:00.000Z')
+    }
     if (body.order !== undefined) updateData.order = body.order
 
     // completedAt は Prisma クライアントの世代差異でエラーになる可能性があるため、

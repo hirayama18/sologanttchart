@@ -13,8 +13,8 @@ export async function POST(request: NextRequest) {
     const taskData = {
       title: body.title,
       assignee: body.assignee,
-      plannedStart: new Date(body.plannedStart),
-      plannedEnd: new Date(body.plannedEnd),
+      plannedStart: new Date(body.plannedStart + (body.plannedStart.includes('T') ? '' : 'T00:00:00.000Z')),
+      plannedEnd: new Date(body.plannedEnd + (body.plannedEnd.includes('T') ? '' : 'T00:00:00.000Z')),
       projectId: body.projectId,
       order: body.order
     }
