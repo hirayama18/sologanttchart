@@ -69,17 +69,28 @@ const TaskBar = memo(({ task, visibleDates, dragState, DAY_WIDTH_PX, onMouseDown
 
   const isCompleted = !!task.completedAt
   const colorClass = isCompleted ? 'bg-gray-400' : getAssigneeColor(task.assignee)
+  
+  // デバッグ用: 完了タスクの情報をログ出力
+  if (task.completedAt) {
+    console.log('Completed task detected:', {
+      id: task.id,
+      title: task.title,
+      completedAt: task.completedAt,
+      isCompleted,
+      colorClass
+    })
+  }
 
   return (
     <div
-      className={`flex items-center ${colorClass} text-white text-xs rounded px-2 py-1 cursor-move select-none relative group opacity-80 hover:opacity-100 transition-opacity`}
+      className={`flex items-center ${colorClass} text-white text-xs rounded px-2 py-1 cursor-move select-none relative group opacity-80 hover:opacity-100 transition-opacity ${isCompleted ? 'line-through' : ''}`}
       style={{
         position: 'absolute',
         ...taskBarStyle,
         height: '28px',
         minWidth: '20px',
       }}
-      title={`${task.title} (${task.assignee})`}
+      title={`${task.title} (${task.assignee}) ${isCompleted ? '- 完了済み' : ''}`}
       onMouseDown={(e) => onMouseDown(e, task.id, 'move')}
     >
       {/* 左端リサイズハンドル */}
@@ -490,7 +501,10 @@ export function GanttChart({ project, tasks, onTasksChange, onEditTask, onTaskUp
               )}
                 <div className="w-full flex items-center justify-between gap-2">
                   <div className="min-w-0">
-                    <div className="font-medium text-sm leading-none truncate">{task.title}</div>
+                    <div className={`font-medium text-sm leading-none truncate ${task.completedAt ? 'line-through text-gray-500' : ''}`}>
+                      {task.title}
+                      {task.completedAt && <span className="ml-2 text-xs text-green-600">✓ 完了</span>}
+                    </div>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
                     <span

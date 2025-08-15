@@ -80,6 +80,7 @@ export async function PATCH(
 
     const task = await TaskDAL.update(id, updateData)
 
+    let finalCompletedAt: string | null = null
     if (completedAtIso !== undefined) {
       let dateOrNull: Date | null = null
       if (completedAtIso) {
@@ -88,12 +89,16 @@ export async function PATCH(
           ? completedAtIso 
           : completedAtIso + 'T00:00:00.000Z'
         dateOrNull = new Date(dateString)
+        finalCompletedAt = dateOrNull.toISOString()
       }
       const { prisma } = await import('@/lib/prisma')
       await prisma.task.update({
         where: { id },
         data: { completedAt: dateOrNull }
       })
+    } else {
+      // completedAtが更新されない場合は元の値を使用
+      finalCompletedAt = task.completedAt ? task.completedAt.toISOString() : null
     }
     
     const response: TaskResponse = {
@@ -107,7 +112,7 @@ export async function PATCH(
       projectId: task.projectId,
       createdAt: task.createdAt.toISOString(),
       updatedAt: task.updatedAt.toISOString(),
-      completedAt: task.completedAt ? task.completedAt.toISOString() : null
+      completedAt: finalCompletedAt
     }
 
     return NextResponse.json(response)
