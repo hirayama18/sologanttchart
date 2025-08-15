@@ -60,8 +60,8 @@ export function TaskForm({ open, onOpenChange, onTaskCreated, projectId, task }:
       const requestData: CreateTaskRequest = {
         title: formData.title,
         assignee: formData.assignee,
-        plannedStart: new Date(formData.plannedStart).toISOString(),
-        plannedEnd: new Date(formData.plannedEnd).toISOString(),
+        plannedStart: formData.plannedStart,  // YYYY-MM-DD形式で送信
+        plannedEnd: formData.plannedEnd,      // YYYY-MM-DD形式で送信
         projectId
       }
 

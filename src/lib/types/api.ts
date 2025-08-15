@@ -31,8 +31,8 @@ export interface ProjectWithTasksResponse extends ProjectResponse {
 export interface CreateTaskRequest {
   title: string
   assignee: string
-  plannedStart: string // ISO string
-  plannedEnd: string // ISO string
+  plannedStart: string // YYYY-MM-DD string or ISO string
+  plannedEnd: string // YYYY-MM-DD string or ISO string
   projectId: string
   order?: number
   completedAt?: string | null
@@ -41,8 +41,8 @@ export interface CreateTaskRequest {
 export interface UpdateTaskRequest {
   title?: string
   assignee?: string
-  plannedStart?: string // ISO string
-  plannedEnd?: string // ISO string
+  plannedStart?: string // YYYY-MM-DD string or ISO string
+  plannedEnd?: string // YYYY-MM-DD string or ISO string
   order?: number
   completedAt?: string | null
 }
