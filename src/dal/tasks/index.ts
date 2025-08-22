@@ -92,6 +92,19 @@ export class TaskDAL {
   }
 
   /**
+   * タスクがユーザーのプロジェクトに属しているかチェック
+   */
+  static async isOwnerTask(taskId: string, userId: string): Promise<boolean> {
+    const task = await prisma.task.findUnique({
+      where: { id: taskId },
+      include: { project: true }
+    })
+    
+    if (!task) return false
+    return task.project.userId === userId
+  }
+
+  /**
    * タスクを複製
    */
   static async duplicate(id: string): Promise<Task> {

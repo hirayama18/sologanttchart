@@ -4,11 +4,16 @@ export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
 // Delay DAL import to runtime
 import { CreateProjectRequest, ProjectResponse } from '@/lib/types/api'
+import { getAuthenticatedUserId, isAuthError } from '@/lib/auth'
 
 export async function GET() {
   try {
-    // TODO: Clerk認証実装後にuserId取得を実装
-    const userId = 'temp-user-id' // 一時的なユーザーID
+    // Clerk認証からユーザーIDを取得
+    const authResult = await getAuthenticatedUserId()
+    if (isAuthError(authResult)) {
+      return authResult.error
+    }
+    const { userId } = authResult
     
     const { ProjectDAL } = await import('@/dal/projects')
     const projects = await ProjectDAL.getByUserId(userId)
@@ -37,8 +42,12 @@ export async function POST(request: NextRequest) {
   try {
     const body: CreateProjectRequest = await request.json()
     
-    // TODO: Clerk認証実装後にuserId取得を実装
-    const userId = 'temp-user-id' // 一時的なユーザーID
+    // Clerk認証からユーザーIDを取得
+    const authResult = await getAuthenticatedUserId()
+    if (isAuthError(authResult)) {
+      return authResult.error
+    }
+    const { userId } = authResult
     
     const { ProjectDAL } = await import('@/dal/projects')
     const projectData = {

@@ -1,5 +1,10 @@
-import { redirect } from 'next/navigation'
+import { LandingPage } from "@/components/features/landing/landing-page"
+import { AuthRedirect } from "@/components/auth/auth-redirect"
 
 export default function Home() {
-  redirect('/projects')
+  return (
+    <AuthRedirect>
+      <LandingPage />
+    </AuthRedirect>
+  )
 }

@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { addDays, format, startOfDay } from 'date-fns'
 import ExcelJS from 'exceljs'
+import { getAuthenticatedUserId, isAuthError } from '@/lib/auth'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -10,15 +11,36 @@ export async function POST(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params
-  const { ProjectDAL } = await import('@/dal/projects')
-  const project = await ProjectDAL.getById(id)
-  if (!project) {
-    return new Response(JSON.stringify({ error: 'Project not found' }), {
-      status: 404,
-      headers: { 'Content-Type': 'application/json' },
-    })
-  }
+  try {
+    // Clerk認証からユーザーIDを取得
+    const authResult = await getAuthenticatedUserId()
+    if (isAuthError(authResult)) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+    const { userId } = authResult
+
+    const { id } = await params
+    const { ProjectDAL } = await import('@/dal/projects')
+    
+    // プロジェクトの所有者チェック
+    const isOwner = await ProjectDAL.isOwner(id, userId)
+    if (!isOwner) {
+      return new Response(JSON.stringify({ error: 'Forbidden: You do not have access to this project' }), {
+        status: 403,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+
+    const project = await ProjectDAL.getById(id)
+    if (!project) {
+      return new Response(JSON.stringify({ error: 'Project not found' }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
 
   const workbook = new ExcelJS.Workbook()
   const sheet = workbook.addWorksheet('Gantt')
@@ -158,16 +180,23 @@ export async function POST(
     rowIndex += 1
   }
 
-  const buffer: ArrayBuffer = await workbook.xlsx.writeBuffer()
-  const fileName = `gantt_${project.title}_${format(new Date(), 'yyyyMMdd')}.xlsx`
-  return new Response(buffer, {
-    status: 200,
-    headers: {
-      'Content-Type':
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      'Content-Disposition': `attachment; filename="${encodeURIComponent(fileName)}"`,
-    },
-  })
+    const buffer: ArrayBuffer = await workbook.xlsx.writeBuffer()
+    const fileName = `gantt_${project.title}_${format(new Date(), 'yyyyMMdd')}.xlsx`
+    return new Response(buffer, {
+      status: 200,
+      headers: {
+        'Content-Type':
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'Content-Disposition': `attachment; filename="${encodeURIComponent(fileName)}"`,
+      },
+    })
+  } catch (error) {
+    console.error('Error exporting project:', error)
+    return new Response(JSON.stringify({ error: 'Internal Server Error' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
 }
 
 

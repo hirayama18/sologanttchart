@@ -4,14 +4,32 @@ export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
 // Delay DAL import to runtime to avoid build-time resolution issues
 import { UpdateProjectRequest, ProjectWithTasksResponse, TaskResponse } from '@/lib/types/api'
+import { getAuthenticatedUserId, isAuthError } from '@/lib/auth'
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Clerk認証からユーザーIDを取得
+    const authResult = await getAuthenticatedUserId()
+    if (isAuthError(authResult)) {
+      return authResult.error
+    }
+    const { userId } = authResult
+
     const { ProjectDAL } = await import('@/dal/projects')
     const { id } = await params
+    
+    // プロジェクトの所有者チェック
+    const isOwner = await ProjectDAL.isOwner(id, userId)
+    if (!isOwner) {
+      return NextResponse.json(
+        { error: 'Forbidden: You do not have access to this project' },
+        { status: 403 }
+      )
+    }
+    
     const project = await ProjectDAL.getById(id)
     
     if (!project) {
@@ -70,16 +88,25 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Clerk認証からユーザーIDを取得
+    const authResult = await getAuthenticatedUserId()
+    if (isAuthError(authResult)) {
+      return authResult.error
+    }
+    const { userId } = authResult
+
     const { ProjectDAL } = await import('@/dal/projects')
     const { id } = await params
     const body: UpdateProjectRequest = await request.json()
     
-    // TODO: Clerk認証実装後に所有者チェックを実装
-    // const userId = 'temp-user-id'
-    // const isOwner = await ProjectDAL.isOwner(id, userId)
-    // if (!isOwner) {
-    //   return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    // }
+    // プロジェクトの所有者チェック
+    const isOwner = await ProjectDAL.isOwner(id, userId)
+    if (!isOwner) {
+      return NextResponse.json(
+        { error: 'Forbidden: You do not have access to this project' },
+        { status: 403 }
+      )
+    }
     
     const updateData: Partial<{ title: string; startDate: Date; endDate: Date | null }> = {}
     if (body.title) updateData.title = body.title
@@ -125,14 +152,24 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Clerk認証からユーザーIDを取得
+    const authResult = await getAuthenticatedUserId()
+    if (isAuthError(authResult)) {
+      return authResult.error
+    }
+    const { userId } = authResult
+
     const { ProjectDAL } = await import('@/dal/projects')
     const { id } = await params
-    // TODO: Clerk認証実装後に所有者チェックを実装
-    // const userId = 'temp-user-id'
-    // const isOwner = await ProjectDAL.isOwner(id, userId)
-    // if (!isOwner) {
-    //   return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    // }
+    
+    // プロジェクトの所有者チェック
+    const isOwner = await ProjectDAL.isOwner(id, userId)
+    if (!isOwner) {
+      return NextResponse.json(
+        { error: 'Forbidden: You do not have access to this project' },
+        { status: 403 }
+      )
+    }
 
     await ProjectDAL.delete(id)
     

@@ -4,14 +4,32 @@ export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
 // Delay DAL import to runtime
 import { TaskResponse } from '@/lib/types/api'
+import { getAuthenticatedUserId, isAuthError } from '@/lib/auth'
 
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Clerk認証からユーザーIDを取得
+    const authResult = await getAuthenticatedUserId()
+    if (isAuthError(authResult)) {
+      return authResult.error
+    }
+    const { userId } = authResult
+
     const { TaskDAL } = await import('@/dal/tasks')
     const { id } = await params
+    
+    // タスクの所有者チェック
+    const isOwner = await TaskDAL.isOwnerTask(id, userId)
+    if (!isOwner) {
+      return NextResponse.json(
+        { error: 'Forbidden: You do not have access to this task' },
+        { status: 403 }
+      )
+    }
+    
     const task = await TaskDAL.duplicate(id)
     
     const response: TaskResponse = {

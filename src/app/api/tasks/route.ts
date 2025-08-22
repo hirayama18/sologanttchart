@@ -4,11 +4,29 @@ export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
 // Delay DAL import to runtime
 import { CreateTaskRequest, TaskResponse } from '@/lib/types/api'
+import { getAuthenticatedUserId, isAuthError } from '@/lib/auth'
 
 export async function POST(request: NextRequest) {
   try {
+    // Clerk認証からユーザーIDを取得
+    const authResult = await getAuthenticatedUserId()
+    if (isAuthError(authResult)) {
+      return authResult.error
+    }
+    const { userId } = authResult
+
     const { TaskDAL } = await import('@/dal/tasks')
+    const { ProjectDAL } = await import('@/dal/projects')
     const body: CreateTaskRequest = await request.json()
+    
+    // プロジェクトの所有者チェック
+    const isOwner = await ProjectDAL.isOwner(body.projectId, userId)
+    if (!isOwner) {
+      return NextResponse.json(
+        { error: 'Forbidden: You do not have access to this project' },
+        { status: 403 }
+      )
+    }
     
     const taskData = {
       title: body.title,
