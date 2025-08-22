@@ -97,7 +97,7 @@ export function CTASection() {
                 <p className="text-sm text-gray-600 mb-4">
                   既にアカウントをお持ちですか？
                 </p>
-                <SignInButton fallbackRedirectUrl="/projects">
+                <SignInButton mode="modal" fallbackRedirectUrl="/projects">
                   <Button variant="outline" className="w-full">
                     ログインする
                   </Button>

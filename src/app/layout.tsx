@@ -31,8 +31,6 @@ export default function RootLayout({
       publishableKey={process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}
       afterSignInUrl="/projects"
       afterSignUpUrl="/projects"
-      signInUrl="/sign-in"
-      signUpUrl="/sign-up"
     >
       <html lang="ja">
         <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>

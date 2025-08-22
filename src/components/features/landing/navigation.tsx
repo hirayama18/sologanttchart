@@ -61,12 +61,12 @@ export function Navigation() {
         </div>
         
         <div className="hidden lg:flex lg:flex-1 lg:justify-end lg:gap-4">
-          <SignInButton fallbackRedirectUrl="/projects">
+          <SignInButton mode="modal" fallbackRedirectUrl="/projects">
             <Button variant="ghost" className="text-sm font-semibold">
               ログイン
             </Button>
           </SignInButton>
-          <SignUpButton fallbackRedirectUrl="/projects">
+          <SignUpButton mode="modal" fallbackRedirectUrl="/projects">
             <Button className="bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:from-blue-700 hover:to-purple-700">
               無料で始める
             </Button>
@@ -109,12 +109,12 @@ export function Navigation() {
                   ))}
                 </div>
                 <div className="py-6 space-y-4">
-                  <SignInButton fallbackRedirectUrl="/projects">
+                  <SignInButton mode="modal" fallbackRedirectUrl="/projects">
                     <Button variant="ghost" className="w-full">
                       ログイン
                     </Button>
                   </SignInButton>
-                  <SignUpButton fallbackRedirectUrl="/projects">
+                  <SignUpButton mode="modal" fallbackRedirectUrl="/projects">
                     <Button className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:from-blue-700 hover:to-purple-700">
                       無料で始める
                     </Button>
