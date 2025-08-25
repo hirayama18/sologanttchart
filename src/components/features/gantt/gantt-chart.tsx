@@ -6,6 +6,8 @@ import { TaskResponse, ProjectWithTasksResponse } from '@/lib/types/api'
 import { format, addDays, startOfDay, differenceInCalendarDays, isWeekend } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import { useOptimizedTaskUpdate } from '@/hooks/useOptimizedTaskUpdate'
+import { getAssigneeColorClass } from '@/lib/colors'
+import { ColorLegend } from './color-legend'
 
 // ドラッグ状態の型定義
 type DragState = {
@@ -381,13 +383,7 @@ export function GanttChart({ project, tasks, onTasksChange, onEditTask, onTaskUp
 
   // 担当者別の色を取得（TaskBarコンポーネント用）
   const getAssigneeColor = useCallback((assignee: string) => {
-    switch (assignee) {
-      case '弊社': return 'bg-blue-500'
-      case 'お客様': return 'bg-green-500'
-      case '弊社/お客様': return 'bg-purple-500'
-      case 'その他': return 'bg-gray-500'
-      default: return 'bg-gray-500'
-    }
+    return getAssigneeColorClass(assignee, false)
   }, [])
 
   // 今日の日付
@@ -396,6 +392,11 @@ export function GanttChart({ project, tasks, onTasksChange, onEditTask, onTaskUp
 
   return (
     <div className="bg-white border rounded-lg overflow-hidden">
+      {/* 色凡例 */}
+      <div className="p-4 border-b">
+        <ColorLegend tasks={tasks} />
+      </div>
+      
       {/* ヘッダー部分 */}
       <div className="border-b bg-gray-50 p-4">
         <div className="flex items-start justify-between gap-4">
@@ -405,28 +406,10 @@ export function GanttChart({ project, tasks, onTasksChange, onEditTask, onTaskUp
             </p>
             <p className="text-xs text-gray-500 mt-1">💡 Enterキーでタスクを追加できます</p>
           </div>
-          {/* 凡例（ヘッダー右側） */}
-          <div className="flex items-center flex-wrap gap-4 text-sm">
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 bg-blue-500 rounded" aria-hidden />
-              <span>弊社</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 bg-green-500 rounded" aria-hidden />
-              <span>お客様</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 bg-purple-500 rounded" aria-hidden />
-              <span>弊社/お客様</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 bg-gray-500 rounded" aria-hidden />
-              <span>その他</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-0.5 h-4 bg-red-500" aria-hidden />
-              <span>今日</span>
-            </div>
+          {/* 今日のマーカー説明 */}
+          <div className="flex items-center gap-2 text-sm">
+            <div className="w-0.5 h-4 bg-red-500" aria-hidden />
+            <span>今日</span>
           </div>
         </div>
       </div>

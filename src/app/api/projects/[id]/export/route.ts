@@ -3,6 +3,7 @@ import { addDays, format, startOfDay } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import ExcelJS from 'exceljs'
 import { getAuthenticatedUserId, isAuthError } from '@/lib/auth'
+import { getAssigneeColorHex } from '@/lib/colors'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -143,12 +144,7 @@ export async function POST(
   }
 
   // タスク行
-  const colorByAssignee: Record<string, string> = {
-    '弊社': '4472C4', // blue
-    'お客様': '70AD47', // green
-    '弊社/お客様': '8E7CC3', // purple
-    'その他': 'A6A6A6', // gray
-  }
+  // 動的な色システムを使用（固定色から変更）
 
   let rowIndex = headerOffset + 3  // 曜日行を追加したため+1
   for (const t of project.tasks) {
@@ -167,7 +163,7 @@ export async function POST(
     const fromCol = 3 + startOffset
     const toCol = 3 + endOffset
 
-    const hex = t.completedAt ? 'B7B7B7' : colorByAssignee[t.assignee] || 'A6A6A6'
+    const hex = getAssigneeColorHex(t.assignee, !!t.completedAt)
     for (let c = fromCol; c <= toCol; c += 1) {
       const cell = row.getCell(c)
       cell.fill = {
