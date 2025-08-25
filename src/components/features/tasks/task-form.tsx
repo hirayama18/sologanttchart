@@ -7,7 +7,11 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { CreateTaskRequest, TaskResponse } from '@/lib/types/api'
-import { TaskAssignee } from '@/lib/types/database'
+
+interface AssigneeOption {
+  name: string
+  order: number
+}
 
 interface TaskFormProps {
   open: boolean
@@ -23,9 +27,10 @@ interface TaskFormProps {
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function TaskForm({ open, onOpenChange, onTaskCreated, projectId, task, optimizedCreateTask, optimizedEditTask: _ }: TaskFormProps) {
   const [loading, setLoading] = useState(false)
+  const [assigneeOptions, setAssigneeOptions] = useState<AssigneeOption[]>([])
   const [formData, setFormData] = useState({
     title: '',
-    assignee: TaskAssignee.COMPANY,
+    assignee: '',
     plannedStart: new Date().toISOString().split('T')[0],
     plannedEnd: new Date().toISOString().split('T')[0],
     completedAt: ''  // 空文字列は未完了を表す
@@ -33,22 +38,47 @@ export function TaskForm({ open, onOpenChange, onTaskCreated, projectId, task, o
 
   const isEditMode = !!task
 
+  // 担当者選択肢を読み込み
+  useEffect(() => {
+    const loadAssigneeOptions = async () => {
+      try {
+        const response = await fetch(`/api/projects/${projectId}/assignees`)
+        if (response.ok) {
+          const options = await response.json()
+          setAssigneeOptions(options.sort((a: AssigneeOption, b: AssigneeOption) => a.order - b.order))
+          
+          // フォームの初期値を設定（担当者選択肢の最初の項目）
+          if (options.length > 0 && !formData.assignee && !task) {
+            setFormData(prev => ({ ...prev, assignee: options[0].name }))
+          }
+        }
+      } catch (error) {
+        console.error('Error loading assignee options:', error)
+      }
+    }
+    
+    if (projectId) {
+      loadAssigneeOptions()
+    }
+  }, [projectId])
+
   // taskが変更されたときにフォームデータを更新
   useEffect(() => {
     if (task) {
       // 編集モード: タスクの現在値を設定
       setFormData({
         title: task.title,
-        assignee: task.assignee as TaskAssignee,
+        assignee: task.assignee,
         plannedStart: new Date(task.plannedStart).toISOString().split('T')[0],
         plannedEnd: new Date(task.plannedEnd).toISOString().split('T')[0],
         completedAt: task.completedAt ? new Date(task.completedAt).toISOString().split('T')[0] : ''
       })
     } else {
       // 新規作成モード: 初期値を設定
+      const defaultAssignee = assigneeOptions.length > 0 ? assigneeOptions[0].name : ''
       setFormData({
         title: '',
-        assignee: TaskAssignee.COMPANY,
+        assignee: defaultAssignee,
         plannedStart: new Date().toISOString().split('T')[0],
         plannedEnd: new Date().toISOString().split('T')[0],
         completedAt: ''
@@ -86,9 +116,10 @@ export function TaskForm({ open, onOpenChange, onTaskCreated, projectId, task, o
           onOpenChange(false)
           
           // フォームをリセット
+          const defaultAssignee = assigneeOptions.length > 0 ? assigneeOptions[0].name : ''
           setFormData({
             title: '',
-            assignee: TaskAssignee.COMPANY,
+            assignee: defaultAssignee,
             plannedStart: new Date().toISOString().split('T')[0],
             plannedEnd: new Date().toISOString().split('T')[0],
             completedAt: ''
@@ -122,9 +153,10 @@ export function TaskForm({ open, onOpenChange, onTaskCreated, projectId, task, o
           onOpenChange(false)
           
           if (!isEditMode) {
+            const defaultAssignee = assigneeOptions.length > 0 ? assigneeOptions[0].name : ''
             setFormData({
               title: '',
-              assignee: TaskAssignee.COMPANY,
+              assignee: defaultAssignee,
               plannedStart: new Date().toISOString().split('T')[0],
               plannedEnd: new Date().toISOString().split('T')[0],
               completedAt: ''
@@ -188,10 +220,11 @@ export function TaskForm({ open, onOpenChange, onTaskCreated, projectId, task, o
                   <SelectValue placeholder="担当者を選択" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={TaskAssignee.COMPANY}>弊社</SelectItem>
-                  <SelectItem value={TaskAssignee.CLIENT}>お客様</SelectItem>
-                  <SelectItem value={TaskAssignee.BOTH}>弊社/お客様</SelectItem>
-                  <SelectItem value={TaskAssignee.OTHER}>その他</SelectItem>
+                  {assigneeOptions.map((option) => (
+                    <SelectItem key={option.name} value={option.name}>
+                      {option.name}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>

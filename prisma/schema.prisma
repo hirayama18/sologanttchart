@@ -23,6 +23,7 @@ model Project {
   // Relations
   tasks Task[]
   assigneeColors AssigneeColor[]
+  assigneeOptions ProjectAssigneeOption[]
 
   @@map("projects")
 }
@@ -60,4 +61,21 @@ model AssigneeColor {
   // 同じプロジェクト内で同じ担当者は一つの色設定のみ
   @@unique([projectId, assignee])
   @@map("assignee_colors")
+}
+
+model ProjectAssigneeOption {
+  id        String   @id @default(cuid())
+  name      String   // 担当者名（例: "弊社", "デザイン部", "システム部"）
+  order     Int      // 表示順序（0-3）
+  projectId String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  // 同じプロジェクト内で同じ順序は一つのみ & 同じ名前は一つのみ
+  @@unique([projectId, order])
+  @@unique([projectId, name])
+  @@map("project_assignee_options")
 }

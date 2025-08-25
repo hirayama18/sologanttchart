@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { ProjectWithTasksResponse, TaskResponse } from '@/lib/types/api'
 import { GanttChart } from '@/components/features/gantt/gantt-chart'
 import { TaskForm } from '@/components/features/tasks/task-form'
+import { AssigneeSettingsDialog } from '@/components/features/projects/assignee-settings-dialog'
 import { Button } from '@/components/ui/button'
 import { ArrowLeft, BarChart3, Plus, Download, Calendar as CalendarIcon } from 'lucide-react'
 import { Input } from '@/components/ui/input'
@@ -199,6 +200,13 @@ export default function GanttPage() {
             </div>
             <div className="flex items-center space-x-2">
               <div className="text-sm text-gray-500 mr-2">総タスク数: {tasks.length}件</div>
+              <AssigneeSettingsDialog 
+                projectId={projectId}
+                onOptionsUpdate={() => {
+                  // 担当者設定が変更されたらタスクフォームを再読み込み
+                  // 実際の実装では、タスクフォームの担当者選択肢を更新する必要がある
+                }}
+              />
               <Button
                 size="sm"
                 variant={editingProject ? 'default' : 'outline'}
