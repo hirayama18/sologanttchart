@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
 import { addDays, format, startOfDay } from 'date-fns'
+import { ja } from 'date-fns/locale'
 import ExcelJS from 'exceljs'
 import { getAuthenticatedUserId, isAuthError } from '@/lib/auth'
 
@@ -68,9 +69,9 @@ export async function POST(
     sheet.getColumn(colIndex).width = 3
   }
 
-  // 月・日ヘッダー
-  // 月セルは結合、日セルは各日
-  // 月行: headerOffset, 日行: headerOffset+1
+  // 月・日・曜日ヘッダー
+  // 月セルは結合、日セルと曜日セルは各日
+  // 月行: headerOffset, 日行: headerOffset+1, 曜日行: headerOffset+2
   let cursor = 0
   while (cursor < totalDays) {
     const date = addDays(startDate, cursor)
@@ -91,6 +92,7 @@ export async function POST(
     cursor += span
   }
 
+  // 日行
   for (let i = 0; i < totalDays; i += 1) {
     const d = addDays(startOfDay(startDate), i)
     const col = 3 + i
@@ -98,8 +100,38 @@ export async function POST(
     sheet.getCell(headerOffset + 1, col).alignment = { horizontal: 'center' }
   }
 
-  // ボーダー（ヘッダー部）
-  for (let r = headerOffset; r <= headerOffset + 1; r += 1) {
+  // 曜日行
+  for (let i = 0; i < totalDays; i += 1) {
+    const d = addDays(startOfDay(startDate), i)
+    const col = 3 + i
+    const dayOfWeekShort = format(d, 'EEE', { locale: ja })
+    sheet.getCell(headerOffset + 2, col).value = dayOfWeekShort
+    sheet.getCell(headerOffset + 2, col).alignment = { horizontal: 'center' }
+    
+    // 週末の背景色
+    const isWeekend = d.getDay() === 0 || d.getDay() === 6
+    if (isWeekend) {
+      sheet.getCell(headerOffset + 2, col).fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'EDEFF9' },
+      }
+    }
+  }
+
+  // 左側ヘッダー（タスク名、担当者）
+  sheet.getCell(headerOffset, 1).value = 'タスク名'
+  sheet.getCell(headerOffset, 1).alignment = { horizontal: 'center', vertical: 'middle' }
+  sheet.getCell(headerOffset, 1).font = { bold: true }
+  sheet.mergeCells(headerOffset, 1, headerOffset + 2, 1)  // 3行分を結合
+
+  sheet.getCell(headerOffset, 2).value = '担当者'
+  sheet.getCell(headerOffset, 2).alignment = { horizontal: 'center', vertical: 'middle' }
+  sheet.getCell(headerOffset, 2).font = { bold: true }
+  sheet.mergeCells(headerOffset, 2, headerOffset + 2, 2)  // 3行分を結合
+
+  // ボーダー（ヘッダー部）- 曜日行を含むように修正
+  for (let r = headerOffset; r <= headerOffset + 2; r += 1) {
     for (let c = 1; c < 4 + totalDays; c += 1) {
       sheet.getCell(r, c).border = {
         top: { style: 'thin' },
@@ -118,7 +150,7 @@ export async function POST(
     'その他': 'A6A6A6', // gray
   }
 
-  let rowIndex = headerOffset + 2
+  let rowIndex = headerOffset + 3  // 曜日行を追加したため+1
   for (const t of project.tasks) {
     const row = sheet.getRow(rowIndex)
     row.getCell(1).value = t.title
