@@ -68,6 +68,35 @@ export function getAssigneeColor(assignee: string, isCompleted: boolean = false)
 }
 
 /**
+ * 指定されたカラーインデックスから色を取得
+ */
+export function getColorByIndex(colorIndex: number): typeof COLOR_PALETTE[number] {
+  const index = Math.max(0, Math.min(colorIndex, COLOR_PALETTE.length - 1))
+  return COLOR_PALETTE[index]
+}
+
+/**
+ * プロジェクト固有の色設定を考慮した担当者色取得
+ */
+export function getAssigneeColorWithSettings(
+  assignee: string, 
+  isCompleted: boolean = false,
+  customColorSettings?: Record<string, number>
+): typeof COLOR_PALETTE[number] | typeof COMPLETED_COLOR {
+  if (isCompleted) {
+    return COMPLETED_COLOR
+  }
+  
+  // カスタム設定があればそれを使用
+  if (customColorSettings && customColorSettings[assignee] !== undefined) {
+    return getColorByIndex(customColorSettings[assignee])
+  }
+  
+  // なければデフォルトのハッシュベース選択
+  return getAssigneeColor(assignee, false)
+}
+
+/**
  * Tailwind CSSクラス名を取得
  */
 export function getAssigneeColorClass(assignee: string, isCompleted: boolean = false): string {

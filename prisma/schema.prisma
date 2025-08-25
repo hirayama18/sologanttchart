@@ -22,6 +22,7 @@ model Project {
 
   // Relations
   tasks Task[]
+  assigneeColors AssigneeColor[]
 
   @@map("projects")
 }
@@ -43,4 +44,20 @@ model Task {
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@map("tasks")
+}
+
+model AssigneeColor {
+  id        String   @id @default(cuid())
+  assignee  String
+  colorIndex Int     // 0-4のインデックス（COLOR_PALETTEの配列インデックス）
+  projectId String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  // 同じプロジェクト内で同じ担当者は一つの色設定のみ
+  @@unique([projectId, assignee])
+  @@map("assignee_colors")
 }

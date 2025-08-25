@@ -3,7 +3,8 @@ import { addDays, format, startOfDay } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import ExcelJS from 'exceljs'
 import { getAuthenticatedUserId, isAuthError } from '@/lib/auth'
-import { getAssigneeColorHex } from '@/lib/colors'
+import { getAssigneeColorWithSettings } from '@/lib/colors'
+import { AssigneeColorDAL } from '@/dal/assignee-colors'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -43,6 +44,9 @@ export async function POST(
         headers: { 'Content-Type': 'application/json' },
       })
     }
+
+    // プロジェクトの色設定を取得
+    const colorSettings = await AssigneeColorDAL.getProjectColorSettings(id)
 
   const workbook = new ExcelJS.Workbook()
   const sheet = workbook.addWorksheet('Gantt')
@@ -163,7 +167,8 @@ export async function POST(
     const fromCol = 3 + startOffset
     const toCol = 3 + endOffset
 
-    const hex = getAssigneeColorHex(t.assignee, !!t.completedAt)
+    const color = getAssigneeColorWithSettings(t.assignee, !!t.completedAt, colorSettings)
+    const hex = color.hex
     for (let c = fromCol; c <= toCol; c += 1) {
       const cell = row.getCell(c)
       cell.fill = {

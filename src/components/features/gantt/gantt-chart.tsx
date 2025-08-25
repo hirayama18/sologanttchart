@@ -6,7 +6,7 @@ import { TaskResponse, ProjectWithTasksResponse } from '@/lib/types/api'
 import { format, addDays, startOfDay, differenceInCalendarDays, isWeekend } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import { useOptimizedTaskUpdate } from '@/hooks/useOptimizedTaskUpdate'
-import { getAssigneeColorClass } from '@/lib/colors'
+import { getAssigneeColorWithSettings } from '@/lib/colors'
 import { ColorLegend } from './color-legend'
 
 // ドラッグ状態の型定義
@@ -144,6 +144,26 @@ interface GanttChartProps {
 }
 
 export function GanttChart({ project, tasks, onTasksChange, onEditTask, onTaskUpdate, onTaskDuplicate, onTaskDelete, onTaskReorder }: GanttChartProps) {
+  // 色設定の状態管理
+  const [colorSettings, setColorSettings] = React.useState<Record<string, number>>({})
+  
+  // 色設定を初期読み込み
+  React.useEffect(() => {
+    const loadColorSettings = async () => {
+      try {
+        const response = await fetch(`/api/projects/${project.id}/colors`)
+        if (response.ok) {
+          const settings = await response.json()
+          setColorSettings(settings)
+        }
+      } catch (error) {
+        console.error('Failed to load color settings:', error)
+      }
+    }
+    
+    loadColorSettings()
+  }, [project.id])
+
   // 最適化されたタスク更新フック（デバウンシング + バッチ処理）
   const { updateTask: optimizedUpdateTask, flushPendingUpdates, hasPendingUpdates } = useOptimizedTaskUpdate({
     onLocalUpdate: onTaskUpdate || (() => {}),
@@ -383,8 +403,9 @@ export function GanttChart({ project, tasks, onTasksChange, onEditTask, onTaskUp
 
   // 担当者別の色を取得（TaskBarコンポーネント用）
   const getAssigneeColor = useCallback((assignee: string) => {
-    return getAssigneeColorClass(assignee, false)
-  }, [])
+    const color = getAssigneeColorWithSettings(assignee, false, colorSettings)
+    return color.tailwind
+  }, [colorSettings])
 
   // 今日の日付
   const today = startOfDay(new Date())
@@ -394,7 +415,12 @@ export function GanttChart({ project, tasks, onTasksChange, onEditTask, onTaskUp
     <div className="bg-white border rounded-lg overflow-hidden">
       {/* 色凡例 */}
       <div className="p-4 border-b">
-        <ColorLegend tasks={tasks} />
+        <ColorLegend 
+          tasks={tasks} 
+          projectId={project.id}
+          colorSettings={colorSettings}
+          onColorSettingsChange={setColorSettings}
+        />
       </div>
       
       {/* ヘッダー部分 */}
