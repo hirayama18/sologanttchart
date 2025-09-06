@@ -164,12 +164,12 @@ export function GanttChart({ project, tasks, onTasksChange, onEditTask, onTaskUp
     loadColorSettings()
   }, [project.id])
 
-  // 最適化されたタスク更新フック（デバウンシング + バッチ処理）
+  // 最適化されたタスク更新フック（デバウンシング + バッチ処理 + マージ機能）
   const { updateTask: optimizedUpdateTask, flushPendingUpdates, hasPendingUpdates } = useOptimizedTaskUpdate({
     onLocalUpdate: onTaskUpdate || (() => {}),
     onBatchRefresh: onTasksChange,
-    debounceDelay: 500, // 500ms後にAPI呼び出し
-    batchDelay: 200     // 200ms以内の複数更新をバッチ処理
+    debounceDelay: 1000, // 1000ms後にAPI呼び出し（高速操作対応）
+    batchDelay: 500      // 500ms以内の複数更新をバッチ処理（強化）
   })
 
   // プロジェクト開始日（ローカル日単位に正規化）

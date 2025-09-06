@@ -6,6 +6,7 @@ interface TaskUpdateData {
   taskId: string
   updates: Partial<TaskResponse>
   originalData: Partial<TaskResponse>
+  timestamp: number // 更新時刻を追加
 }
 
 interface UseOptimizedTaskUpdateProps {
@@ -22,20 +23,74 @@ interface UseOptimizedTaskUpdateProps {
 export function useOptimizedTaskUpdate({
   onLocalUpdate,
   onBatchRefresh,
-  debounceDelay = 500,
-  batchDelay = 300
+  debounceDelay = 1000, // 500ms → 1000ms に変更（高速操作対応）
+  batchDelay = 500      // 200ms → 500ms に変更（バッチ処理強化）
 }: UseOptimizedTaskUpdateProps) {
   const pendingUpdatesRef = useRef<Map<string, TaskUpdateData>>(new Map())
   const rollbackDataRef = useRef<Map<string, Partial<TaskResponse>>>(new Map())
 
-  // バッチ処理でAPI更新を実行
+  // 更新マージ機能
+  const mergeTaskUpdates = useCallback((existing: Partial<TaskResponse>, newUpdates: Partial<TaskResponse>): Partial<TaskResponse> => {
+    return {
+      ...existing,
+      ...newUpdates,
+      // 日付フィールドは最新の値のみを保持
+      plannedStart: newUpdates.plannedStart ?? existing.plannedStart,
+      plannedEnd: newUpdates.plannedEnd ?? existing.plannedEnd,
+      completedAt: newUpdates.completedAt ?? existing.completedAt,
+    }
+  }, [])
+
+  // タスク別更新マージ機能
+  const mergeUpdatesForTask = useCallback((taskId: string, newUpdates: Partial<TaskResponse>, originalData?: Partial<TaskResponse>) => {
+    const existing = pendingUpdatesRef.current.get(taskId)
+    if (existing) {
+      // 既存の更新と新しい更新をマージ
+      const mergedUpdates = mergeTaskUpdates(existing.updates, newUpdates)
+      pendingUpdatesRef.current.set(taskId, {
+        ...existing,
+        updates: mergedUpdates,
+        timestamp: Date.now()
+      })
+    } else {
+      // 新しい更新として追加
+      pendingUpdatesRef.current.set(taskId, {
+        taskId,
+        updates: newUpdates,
+        originalData: originalData || {},
+        timestamp: Date.now()
+      })
+    }
+  }, [mergeTaskUpdates])
+
+  // バッチ処理でAPI更新を実行（改善版）
   const processBatch = useCallback(async (updates: TaskUpdateData[]) => {
     const successfulUpdates: string[] = []
     const failedUpdates: TaskUpdateData[] = []
 
+    // 更新をタスクIDごとにグループ化
+    const updatesByTask = updates.reduce((acc, update) => {
+      if (!acc[update.taskId]) {
+        acc[update.taskId] = []
+      }
+      acc[update.taskId].push(update)
+      return acc
+    }, {} as Record<string, TaskUpdateData[]>)
+
+    // 各タスクの最新更新のみを処理
+    const latestUpdates = Object.values(updatesByTask).map(taskUpdates => 
+      taskUpdates.sort((a, b) => b.timestamp - a.timestamp)[0]
+    )
+
+    console.log('ProcessBatch - Processing updates:', {
+      totalUpdates: updates.length,
+      uniqueTasks: latestUpdates.length,
+      taskIds: latestUpdates.map(u => u.taskId)
+    })
+
     // 並列でAPI更新を実行
     await Promise.allSettled(
-      updates.map(async ({ taskId, updates }) => {
+      latestUpdates.map(async ({ taskId, updates }) => {
         try {
           const response = await fetch(`/api/tasks/${taskId}`, {
             method: 'PATCH',
@@ -44,13 +99,14 @@ export function useOptimizedTaskUpdate({
           })
 
           if (!response.ok) {
-            throw new Error(`API update failed: ${response.status}`)
+            const errorData = await response.json().catch(() => ({}))
+            throw new Error(`API update failed: ${response.status} - ${errorData.message || 'Unknown error'}`)
           }
 
           successfulUpdates.push(taskId)
         } catch (error) {
           console.error(`Failed to update task ${taskId}:`, error)
-          failedUpdates.push({ taskId, updates, originalData: {} })
+          failedUpdates.push({ taskId, updates, originalData: {}, timestamp: Date.now() })
         }
       })
     )
@@ -63,12 +119,16 @@ export function useOptimizedTaskUpdate({
       }
     })
 
-    // 失敗した更新があれば通知
+    // 失敗した更新があれば詳細な通知
     if (failedUpdates.length > 0) {
-      alert(`${failedUpdates.length}個のタスクの更新に失敗しました。元の状態に戻します。`)
+      const errorMessage = `以下のタスクの更新に失敗しました:\n${failedUpdates.map(f => `- タスクID: ${f.taskId}`).join('\n')}\n\n元の状態に戻します。`
+      console.error('Batch update failed:', errorMessage)
+      alert(errorMessage)
       
       // フォールバック：全データ再取得
       onBatchRefresh?.()
+    } else {
+      console.log('All updates successful:', successfulUpdates)
     }
 
     // 処理完了後にクリーンアップ
@@ -89,7 +149,7 @@ export function useOptimizedTaskUpdate({
     }
   }, debounceDelay)
 
-  // メインの更新関数
+  // メインの更新関数（マージ機能付き）
   const updateTask = useCallback((
     taskId: string,
     updates: Partial<TaskResponse>,
@@ -100,27 +160,24 @@ export function useOptimizedTaskUpdate({
       taskId,
       updates,
       originalData,
-      completedAtUpdate: updates.completedAt
+      completedAtUpdate: updates.completedAt,
+      hasPendingUpdate: pendingUpdatesRef.current.has(taskId)
     })
     
     // 1. 即座にローカル状態を更新（楽観的UI更新）
     onLocalUpdate(taskId, updates)
 
-    // 2. ロールバック用データを保存
-    if (originalData) {
+    // 2. ロールバック用データを保存（初回のみ）
+    if (originalData && !rollbackDataRef.current.has(taskId)) {
       rollbackDataRef.current.set(taskId, originalData)
     }
 
-    // 3. API更新をスケジューリング
-    pendingUpdatesRef.current.set(taskId, {
-      taskId,
-      updates,
-      originalData: originalData || {}
-    })
+    // 3. API更新をマージしてスケジューリング
+    mergeUpdatesForTask(taskId, updates, originalData)
 
     // 4. デバウンスされたAPI更新をトリガー
     debouncedApiUpdate(taskId)
-  }, [onLocalUpdate, debouncedApiUpdate])
+  }, [onLocalUpdate, debouncedApiUpdate, mergeUpdatesForTask])
 
   // 即座に全ての保留中の更新を実行する関数
   const flushPendingUpdates = useCallback(() => {
@@ -142,6 +199,9 @@ export function useOptimizedTaskUpdate({
     updateTask,
     flushPendingUpdates,
     cancelPendingUpdates,
-    hasPendingUpdates: () => pendingUpdatesRef.current.size > 0
+    hasPendingUpdates: () => pendingUpdatesRef.current.size > 0,
+    // デバッグ用メソッド
+    getPendingUpdatesCount: () => pendingUpdatesRef.current.size,
+    getPendingTaskIds: () => Array.from(pendingUpdatesRef.current.keys())
   }
 }
