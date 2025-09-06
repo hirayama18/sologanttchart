@@ -1,12 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
-import { CreateProjectRequest, ProjectResponse } from '@/lib/types/api'
-import { Plus } from 'lucide-react'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { CreateProjectRequest, CopyProjectRequest, ProjectResponse } from '@/lib/types/api'
+import { Plus, Copy } from 'lucide-react'
 
 interface CreateProjectFormProps {
   onProjectCreated: (project: ProjectResponse) => void
@@ -15,28 +16,69 @@ interface CreateProjectFormProps {
 export function CreateProjectForm({ onProjectCreated }: CreateProjectFormProps) {
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [projects, setProjects] = useState<ProjectResponse[]>([])
   const [formData, setFormData] = useState({
     title: '',
-    startDate: new Date().toISOString().split('T')[0] // 今日の日付をデフォルトに
+    startDate: new Date().toISOString().split('T')[0], // 今日の日付をデフォルトに
+    sourceProjectId: '' // コピー元プロジェクト
   })
+
+  // プロジェクト一覧を取得
+  useEffect(() => {
+    const fetchProjects = async () => {
+      try {
+        const response = await fetch('/api/projects')
+        if (response.ok) {
+          const data = await response.json()
+          setProjects(data)
+        }
+      } catch (error) {
+        console.error('Error fetching projects:', error)
+      }
+    }
+
+    if (open) {
+      fetchProjects()
+    }
+  }, [open])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
 
     try {
-      const requestData: CreateProjectRequest = {
-        title: formData.title,
-        startDate: new Date(formData.startDate).toISOString()
-      }
+      let response
+      
+      if (formData.sourceProjectId) {
+        // プロジェクトをコピーして作成
+        const requestData: CopyProjectRequest = {
+          title: formData.title,
+          startDate: new Date(formData.startDate).toISOString(),
+          sourceProjectId: formData.sourceProjectId
+        }
 
-      const response = await fetch('/api/projects', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(requestData)
-      })
+        response = await fetch(`/api/projects/${formData.sourceProjectId}/copy`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(requestData)
+        })
+      } else {
+        // 新規プロジェクトを作成
+        const requestData: CreateProjectRequest = {
+          title: formData.title,
+          startDate: new Date(formData.startDate).toISOString()
+        }
+
+        response = await fetch('/api/projects', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(requestData)
+        })
+      }
 
       if (response.ok) {
         const project: ProjectResponse = await response.json()
@@ -44,7 +86,8 @@ export function CreateProjectForm({ onProjectCreated }: CreateProjectFormProps) 
         setOpen(false)
         setFormData({
           title: '',
-          startDate: new Date().toISOString().split('T')[0]
+          startDate: new Date().toISOString().split('T')[0],
+          sourceProjectId: ''
         })
       } else {
         console.error('Failed to create project')
@@ -79,11 +122,37 @@ export function CreateProjectForm({ onProjectCreated }: CreateProjectFormProps) 
         <DialogHeader>
           <DialogTitle>新しいプロジェクトを作成</DialogTitle>
           <DialogDescription>
-            プロジェクトの基本情報を入力してください。
+            プロジェクトの基本情報を入力してください。既存のプロジェクトからコピーすることもできます。
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit}>
           <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="sourceProject" className="text-right">
+                コピー元
+              </Label>
+              <Select value={formData.sourceProjectId || "new"} onValueChange={(value) => handleInputChange('sourceProjectId', value === "new" ? "" : value)}>
+                <SelectTrigger className="col-span-3">
+                  <SelectValue placeholder="新規作成（コピーしない）" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="new">
+                    <div className="flex items-center gap-2">
+                      <Plus className="h-4 w-4" />
+                      新規作成（コピーしない）
+                    </div>
+                  </SelectItem>
+                  {projects.map((project) => (
+                    <SelectItem key={project.id} value={project.id}>
+                      <div className="flex items-center gap-2">
+                        <Copy className="h-4 w-4" />
+                        {project.title}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="title" className="text-right">
                 プロジェクト名
@@ -124,7 +193,7 @@ export function CreateProjectForm({ onProjectCreated }: CreateProjectFormProps) 
               type="submit" 
               disabled={!isFormValid || loading}
             >
-              {loading ? '作成中...' : '作成'}
+              {loading ? (formData.sourceProjectId ? 'コピー中...' : '作成中...') : (formData.sourceProjectId ? 'コピーして作成' : '作成')}
             </Button>
           </DialogFooter>
         </form>

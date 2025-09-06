@@ -65,6 +65,93 @@ export class ProjectDAL {
     })
     return count > 0
   }
+
+  static async copyProject(
+    sourceProjectId: string,
+    newProjectData: CreateProjectData
+  ): Promise<ProjectWithTasks> {
+    // トランザクション内でコピー処理を実行
+    return await prisma.$transaction(async (tx) => {
+      // コピー元プロジェクトの詳細データを取得
+      const sourceProject = await tx.project.findUnique({
+        where: { id: sourceProjectId },
+        include: {
+          tasks: {
+            where: { deleted: false },
+            orderBy: { order: 'asc' },
+          },
+          assigneeOptions: {
+            orderBy: { order: 'asc' },
+          },
+          assigneeColors: true,
+        },
+      })
+
+      if (!sourceProject) {
+        throw new Error('Source project not found')
+      }
+
+      // 新しいプロジェクトを作成
+      const newProject = await tx.project.create({
+        data: newProjectData,
+        include: {
+          tasks: true,
+          assigneeOptions: true,
+          assigneeColors: true,
+        },
+      })
+
+      // タスクをコピー
+      if (sourceProject.tasks.length > 0) {
+        await tx.task.createMany({
+          data: sourceProject.tasks.map((task) => ({
+            title: task.title,
+            assignee: task.assignee,
+            plannedStart: task.plannedStart,
+            plannedEnd: task.plannedEnd,
+            order: task.order,
+            projectId: newProject.id,
+            deleted: false,
+          })),
+        })
+      }
+
+      // 担当者選択肢をコピー
+      if (sourceProject.assigneeOptions.length > 0) {
+        await tx.projectAssigneeOption.createMany({
+          data: sourceProject.assigneeOptions.map((option) => ({
+            projectId: newProject.id,
+            name: option.name,
+            order: option.order,
+          })),
+        })
+      }
+
+      // 担当者色設定をコピー
+      if (sourceProject.assigneeColors.length > 0) {
+        await tx.assigneeColor.createMany({
+          data: sourceProject.assigneeColors.map((color) => ({
+            projectId: newProject.id,
+            assignee: color.assignee,
+            colorIndex: color.colorIndex,
+          })),
+        })
+      }
+
+      // 作成されたプロジェクトを関連データと共に返す
+      const result = await tx.project.findUnique({
+        where: { id: newProject.id },
+        include: {
+          tasks: {
+            where: { deleted: false },
+            orderBy: { order: 'asc' },
+          },
+        },
+      })
+
+      return result as ProjectWithTasks
+    })
+  }
 }
 
 

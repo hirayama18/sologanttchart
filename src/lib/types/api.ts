@@ -13,6 +13,13 @@ export interface UpdateProjectRequest {
   endDate?: string | null
 }
 
+export interface CopyProjectRequest {
+  title: string
+  startDate: string // ISO string
+  endDate?: string | null
+  sourceProjectId: string
+}
+
 export interface ProjectResponse {
   id: string
   title: string

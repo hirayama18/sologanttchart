@@ -65,12 +65,13 @@ export async function POST(
   sheet.getCell('A2').font = { size: 12 }
 
   // 列のセットアップ
-  // A列: タスク名, B列: 担当, C列以降: 日付（期間列は非表示）
+  // A列: タスク名, B列: 完了日, C列: 担当, D列以降: 日付（期間列は非表示）
   const headerOffset = 3 // 1-based row index where headers start
   sheet.getColumn(1).width = 28
-  sheet.getColumn(2).width = 10
+  sheet.getColumn(2).width = 12  // 完了日列
+  sheet.getColumn(3).width = 10  // 担当者列
   for (let i = 0; i < totalDays; i += 1) {
-    const colIndex = 3 + i
+    const colIndex = 4 + i  // 日付列の開始位置を変更
     sheet.getColumn(colIndex).width = 3
   }
 
@@ -88,7 +89,7 @@ export async function POST(
     ) {
       span += 1
     }
-    const from = 3 + cursor
+    const from = 4 + cursor  // 日付列の開始位置を変更
     const to = from + span - 1
     const label = `${date.getMonth() + 1}月`
     sheet.mergeCells(headerOffset, from, headerOffset, to)
@@ -100,7 +101,7 @@ export async function POST(
   // 日行
   for (let i = 0; i < totalDays; i += 1) {
     const d = addDays(startOfDay(startDate), i)
-    const col = 3 + i
+    const col = 4 + i  // 日付列の開始位置を変更
     sheet.getCell(headerOffset + 1, col).value = d.getDate()
     sheet.getCell(headerOffset + 1, col).alignment = { horizontal: 'center' }
   }
@@ -108,7 +109,7 @@ export async function POST(
   // 曜日行
   for (let i = 0; i < totalDays; i += 1) {
     const d = addDays(startOfDay(startDate), i)
-    const col = 3 + i
+    const col = 4 + i  // 日付列の開始位置を変更
     const dayOfWeekShort = format(d, 'EEE', { locale: ja })
     sheet.getCell(headerOffset + 2, col).value = dayOfWeekShort
     sheet.getCell(headerOffset + 2, col).alignment = { horizontal: 'center' }
@@ -124,21 +125,28 @@ export async function POST(
     }
   }
 
-  // 左側ヘッダー（タスク名、担当者）
+  // 左側ヘッダー（タスク名、完了日、担当者）
   sheet.getCell(headerOffset, 1).value = 'タスク名'
   sheet.getCell(headerOffset, 1).alignment = { horizontal: 'center', vertical: 'middle' }
   sheet.getCell(headerOffset, 1).font = { bold: true }
   sheet.mergeCells(headerOffset, 1, headerOffset + 2, 1)  // 3行分を結合
 
-  sheet.getCell(headerOffset, 2).value = '担当者'
+  sheet.getCell(headerOffset, 2).value = '完了日'
   sheet.getCell(headerOffset, 2).alignment = { horizontal: 'center', vertical: 'middle' }
   sheet.getCell(headerOffset, 2).font = { bold: true }
   sheet.mergeCells(headerOffset, 2, headerOffset + 2, 2)  // 3行分を結合
 
+  sheet.getCell(headerOffset, 3).value = '担当者'
+  sheet.getCell(headerOffset, 3).alignment = { horizontal: 'center', vertical: 'middle' }
+  sheet.getCell(headerOffset, 3).font = { bold: true }
+  sheet.mergeCells(headerOffset, 3, headerOffset + 2, 3)  // 3行分を結合
+
   // ボーダー（ヘッダー部）- 曜日行を含むように修正
   for (let r = headerOffset; r <= headerOffset + 2; r += 1) {
-    for (let c = 1; c < 4 + totalDays; c += 1) {
-      sheet.getCell(r, c).border = {
+    for (let c = 1; c < 5 + totalDays; c += 1) {  // 列数を1つ増加
+      const cell = sheet.getCell(r, c)
+      // ヘッダー部分（月・日・曜日）は全て実線
+      cell.border = {
         top: { style: 'thin' },
         left: { style: 'thin' },
         bottom: { style: 'thin' },
@@ -154,7 +162,15 @@ export async function POST(
   for (const t of project.tasks) {
     const row = sheet.getRow(rowIndex)
     row.getCell(1).value = t.title
-    row.getCell(2).value = t.assignee
+    
+    // 完了日の表示
+    if (t.completedAt) {
+      row.getCell(2).value = format(new Date(t.completedAt), 'yyyy/MM/dd')
+    } else {
+      row.getCell(2).value = ''
+    }
+    
+    row.getCell(3).value = t.assignee  // 担当者列を3列目に移動
 
     const startOffset = Math.max(
       0,
@@ -164,8 +180,8 @@ export async function POST(
       totalDays - 1,
       Math.floor((startOfDay(new Date(t.plannedEnd)).getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000))
     )
-    const fromCol = 3 + startOffset
-    const toCol = 3 + endOffset
+    const fromCol = 4 + startOffset  // 日付列の開始位置を変更
+    const toCol = 4 + endOffset
 
     const color = getAssigneeColorWithSettings(t.assignee, !!t.completedAt, colorSettings)
     const hex = color.hex
@@ -184,12 +200,25 @@ export async function POST(
       }
     }
 
+    // ガントチャートエリア全体に点線罫線を追加
+    for (let c = 4; c < 4 + totalDays; c += 1) {
+      const cell = row.getCell(c)
+      if (!cell.border) {
+        cell.border = {
+          top: { style: 'dotted' },
+          left: { style: 'dotted' },
+          bottom: { style: 'dotted' },
+          right: { style: 'dotted' },
+        }
+      }
+    }
+
     // 週末の薄い背景
     for (let i = 0; i < totalDays; i += 1) {
       const date = addDays(startDate, i)
       const isWeekend = date.getDay() === 0 || date.getDay() === 6
       if (isWeekend) {
-        const cell = row.getCell(3 + i)
+        const cell = row.getCell(4 + i)  // 日付列の開始位置を変更
         if (!cell.fill) {
           cell.fill = {
             type: 'pattern',
@@ -201,7 +230,7 @@ export async function POST(
     }
 
     // 左側情報セルの枠
-    for (let c = 1; c <= 2; c += 1) {
+    for (let c = 1; c <= 3; c += 1) {  // 列数を3に変更（タスク名、完了日、担当者）
       row.getCell(c).border = {
         top: { style: 'thin' },
         left: { style: 'thin' },
@@ -211,6 +240,42 @@ export async function POST(
     }
 
     rowIndex += 1
+  }
+
+  // 印刷範囲の設定
+  // A1からプロジェクト情報、ヘッダー、全タスク行までの範囲を印刷範囲に設定
+  const lastRow = rowIndex - 1  // 最後のタスク行
+  const lastCol = 3 + totalDays  // 最後の日付列（A=1, B=2, C=3, D=4...）
+  
+  // 列番号をExcelの列文字に変換する関数
+  const getColumnLetter = (colNum: number): string => {
+    let result = ''
+    while (colNum > 0) {
+      const remainder = (colNum - 1) % 26
+      result = String.fromCharCode(65 + remainder) + result
+      colNum = Math.floor((colNum - 1) / 26)
+    }
+    return result
+  }
+  
+  const lastColLetter = getColumnLetter(lastCol)
+  const printArea = `A1:${lastColLetter}${lastRow}`
+  
+  // ExcelJSでの印刷範囲設定
+  sheet.pageSetup = {
+    printArea: printArea,
+    orientation: 'landscape',  // 横向き
+    fitToPage: true,
+    fitToWidth: 1,
+    fitToHeight: 0,  // 高さは自動調整
+    margins: {
+      left: 0.7,
+      right: 0.7,
+      top: 0.75,
+      bottom: 0.75,
+      header: 0.3,
+      footer: 0.3
+    }
   }
 
     const buffer: ArrayBuffer = await workbook.xlsx.writeBuffer()
