@@ -164,13 +164,32 @@ export function GanttChart({ project, tasks, onTasksChange, onEditTask, onTaskUp
     loadColorSettings()
   }, [project.id])
 
-  // 最適化されたタスク更新フック（デバウンシング + バッチ処理 + マージ機能）
-  const { updateTask: optimizedUpdateTask, flushPendingUpdates, hasPendingUpdates } = useOptimizedTaskUpdate({
+  // 最適化されたタスク更新フック（デバウンシング + バッチ処理 + マージ機能 + キューシステム）
+  const { updateTask: optimizedUpdateTask, flushPendingUpdates, hasPendingUpdates, getQueueStatus } = useOptimizedTaskUpdate({
     onLocalUpdate: onTaskUpdate || (() => {}),
     onBatchRefresh: onTasksChange,
     debounceDelay: 1000, // 1000ms後にAPI呼び出し（高速操作対応）
-    batchDelay: 500      // 500ms以内の複数更新をバッチ処理（強化）
+    batchDelay: 500,     // 500ms以内の複数更新をバッチ処理（強化）
+    useQueueSystem: true // キューシステム有効化！
   })
+
+  // キューシステムのデバッグ情報表示（テスト用）
+  React.useEffect(() => {
+    const interval = setInterval(() => {
+      const queueStatus = getQueueStatus()
+      const hasQueues = Object.keys(queueStatus).length > 0
+      
+      if (hasQueues) {
+        console.log('🔄 Queue Status:', {
+          activeQueues: Object.keys(queueStatus).length,
+          queueDetails: queueStatus,
+          timestamp: new Date().toLocaleTimeString()
+        })
+      }
+    }, 2000) // 2秒ごとにキューの状態をログ出力
+
+    return () => clearInterval(interval)
+  }, [getQueueStatus])
 
   // プロジェクト開始日（ローカル日単位に正規化）
   const projectStartDay = useMemo(() => startOfDay(new Date(project.startDate)), [project.startDate])
@@ -269,6 +288,14 @@ export function GanttChart({ project, tasks, onTasksChange, onEditTask, onTaskUp
 
   // メモ化されたマウスダウンハンドラー
   const handleMouseDown = useCallback((event: React.MouseEvent, taskId: string, dragType: 'move' | 'resize-left' | 'resize-right') => {
+    console.log('🖱️ MouseDown event:', {
+      taskId,
+      dragType,
+      eventType: event.type,
+      target: event.target,
+      timestamp: new Date().toLocaleTimeString()
+    })
+    
     event.preventDefault()
     document.body.style.cursor = dragType === 'move' ? 'grabbing' : 'ew-resize'
     document.body.style.userSelect = 'none'
@@ -326,15 +353,24 @@ export function GanttChart({ project, tasks, onTasksChange, onEditTask, onTaskUp
     const handleUp = () => {
       if (!dragState) return
       
+      console.log('🖱️ MouseUp event - Drag completed:', {
+        taskId: dragState.taskId,
+        originalStart: dragState.originalStart.toISOString(),
+        originalEnd: dragState.originalEnd.toISOString(),
+        previewStart: dragState.previewStart.toISOString(),
+        previewEnd: dragState.previewEnd.toISOString(),
+        timestamp: new Date().toLocaleTimeString()
+      })
+      
       const updatedStartISO = dragState.previewStart.toISOString()
       const updatedEndISO = dragState.previewEnd.toISOString()
       const originalStartISO = dragState.originalStart.toISOString()
       const originalEndISO = dragState.originalEnd.toISOString()
       
-      // API更新データ（YYYY-MM-DD形式）
+      // API更新データ（ISO形式・念のためUTC日付に正規化）
       const apiUpdateData = {
-        plannedStart: format(dragState.previewStart, 'yyyy-MM-dd'),
-        plannedEnd: format(dragState.previewEnd, 'yyyy-MM-dd'),
+        plannedStart: new Date(dragState.previewStart).toISOString(),
+        plannedEnd: new Date(dragState.previewEnd).toISOString(),
       }
       
       // UI更新データ（ISO形式）

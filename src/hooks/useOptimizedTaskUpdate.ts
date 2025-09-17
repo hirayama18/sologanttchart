@@ -1,6 +1,7 @@
 import { useCallback, useRef } from 'react'
 import { TaskResponse } from '@/lib/types/api'
 import { useDebounce, useBatch } from './useDebounce'
+import { useTaskUpdateQueue } from './useTaskUpdateQueue'
 
 interface TaskUpdateData {
   taskId: string
@@ -14,6 +15,7 @@ interface UseOptimizedTaskUpdateProps {
   onBatchRefresh?: () => void
   debounceDelay?: number
   batchDelay?: number
+  useQueueSystem?: boolean // キューシステムを使用するかどうか
 }
 
 /**
@@ -24,10 +26,19 @@ export function useOptimizedTaskUpdate({
   onLocalUpdate,
   onBatchRefresh,
   debounceDelay = 1000, // 500ms → 1000ms に変更（高速操作対応）
-  batchDelay = 500      // 200ms → 500ms に変更（バッチ処理強化）
+  batchDelay = 500,     // 200ms → 500ms に変更（バッチ処理強化）
+  useQueueSystem = false // デフォルトは従来の実装を使用
 }: UseOptimizedTaskUpdateProps) {
   const pendingUpdatesRef = useRef<Map<string, TaskUpdateData>>(new Map())
   const rollbackDataRef = useRef<Map<string, Partial<TaskResponse>>>(new Map())
+
+  // キューシステムの使用
+  const queueSystem = useTaskUpdateQueue({
+    onLocalUpdate,
+    onBatchRefresh,
+    processingDelay: batchDelay,
+    batchWindow: debounceDelay
+  })
 
   // 更新マージ機能
   const mergeTaskUpdates = useCallback((existing: Partial<TaskResponse>, newUpdates: Partial<TaskResponse>): Partial<TaskResponse> => {
@@ -149,7 +160,7 @@ export function useOptimizedTaskUpdate({
     }
   }, debounceDelay)
 
-  // メインの更新関数（マージ機能付き）
+  // メインの更新関数（キューシステム対応）
   const updateTask = useCallback((
     taskId: string,
     updates: Partial<TaskResponse>,
@@ -161,47 +172,92 @@ export function useOptimizedTaskUpdate({
       updates,
       originalData,
       completedAtUpdate: updates.completedAt,
+      useQueueSystem,
       hasPendingUpdate: pendingUpdatesRef.current.has(taskId)
     })
     
-    // 1. 即座にローカル状態を更新（楽観的UI更新）
-    onLocalUpdate(taskId, updates)
+    if (useQueueSystem) {
+      // キューシステムを使用
+      // 注意: queueSystem.updateTask内でonLocalUpdateが呼ばれるため、ここでは呼ばない
+      queueSystem.updateTask(taskId, updates, 'normal')
+    } else {
+      // 従来の実装を使用
+      // 1. 即座にローカル状態を更新（楽観的UI更新）
+      onLocalUpdate(taskId, updates)
 
-    // 2. ロールバック用データを保存（初回のみ）
-    if (originalData && !rollbackDataRef.current.has(taskId)) {
-      rollbackDataRef.current.set(taskId, originalData)
+      // 2. ロールバック用データを保存（初回のみ）
+      if (originalData && !rollbackDataRef.current.has(taskId)) {
+        rollbackDataRef.current.set(taskId, originalData)
+      }
+
+      // 3. API更新をマージしてスケジューリング
+      mergeUpdatesForTask(taskId, updates, originalData)
+
+      // 4. デバウンスされたAPI更新をトリガー
+      debouncedApiUpdate(taskId)
     }
-
-    // 3. API更新をマージしてスケジューリング
-    mergeUpdatesForTask(taskId, updates, originalData)
-
-    // 4. デバウンスされたAPI更新をトリガー
-    debouncedApiUpdate(taskId)
-  }, [onLocalUpdate, debouncedApiUpdate, mergeUpdatesForTask])
+  }, [onLocalUpdate, debouncedApiUpdate, mergeUpdatesForTask, useQueueSystem, queueSystem])
 
   // 即座に全ての保留中の更新を実行する関数
-  const flushPendingUpdates = useCallback(() => {
-    const pendingUpdates = Array.from(pendingUpdatesRef.current.values())
-    if (pendingUpdates.length > 0) {
-      processBatch(pendingUpdates)
-      pendingUpdatesRef.current.clear()
-      rollbackDataRef.current.clear()
+  const flushPendingUpdates = useCallback(async () => {
+    if (useQueueSystem) {
+      await queueSystem.flushPendingUpdates()
+    } else {
+      const pendingUpdates = Array.from(pendingUpdatesRef.current.values())
+      if (pendingUpdates.length > 0) {
+        processBatch(pendingUpdates)
+        pendingUpdatesRef.current.clear()
+        rollbackDataRef.current.clear()
+      }
     }
-  }, [processBatch])
+  }, [processBatch, useQueueSystem, queueSystem])
 
   // 保留中の更新をキャンセルする関数
   const cancelPendingUpdates = useCallback(() => {
-    pendingUpdatesRef.current.clear()
-    rollbackDataRef.current.clear()
-  }, [])
+    if (useQueueSystem) {
+      // キューシステムの場合は個別のキャンセル機能を実装する必要がある
+      console.log('Queue system cancel not implemented yet')
+    } else {
+      pendingUpdatesRef.current.clear()
+      rollbackDataRef.current.clear()
+    }
+  }, [useQueueSystem])
 
   return {
     updateTask,
     flushPendingUpdates,
     cancelPendingUpdates,
-    hasPendingUpdates: () => pendingUpdatesRef.current.size > 0,
+    hasPendingUpdates: () => {
+      if (useQueueSystem) {
+        const status = queueSystem.getQueueStatus()
+        return Object.values(status).some(s => s.queueLength > 0 || s.processing)
+      } else {
+        return pendingUpdatesRef.current.size > 0
+      }
+    },
     // デバッグ用メソッド
-    getPendingUpdatesCount: () => pendingUpdatesRef.current.size,
-    getPendingTaskIds: () => Array.from(pendingUpdatesRef.current.keys())
+    getPendingUpdatesCount: () => {
+      if (useQueueSystem) {
+        const status = queueSystem.getQueueStatus()
+        return Object.values(status).reduce((total, s) => total + s.queueLength, 0)
+      } else {
+        return pendingUpdatesRef.current.size
+      }
+    },
+    getPendingTaskIds: () => {
+      if (useQueueSystem) {
+        return Object.keys(queueSystem.getQueueStatus())
+      } else {
+        return Array.from(pendingUpdatesRef.current.keys())
+      }
+    },
+    // キューシステムの状態を取得
+    getQueueStatus: () => {
+      if (useQueueSystem) {
+        return queueSystem.getQueueStatus()
+      } else {
+        return {}
+      }
+    }
   }
 }

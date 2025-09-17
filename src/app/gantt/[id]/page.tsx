@@ -1,6 +1,6 @@
-'use client'
+ 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { ProjectWithTasksResponse, TaskResponse } from '@/lib/types/api'
 import { GanttChart } from '@/components/features/gantt/gantt-chart'
@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { ArrowLeft, BarChart3, Plus, Download, Calendar as CalendarIcon } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { useOptimizedTaskOperations } from '@/hooks/useOptimizedTaskOperations'
+import { useDebounce } from '@/hooks/useDebounce'
 
 export default function GanttPage() {
   const params = useParams()
@@ -27,6 +28,53 @@ export default function GanttPage() {
     startDate: '',
     endDate: '',
   })
+
+  // onTasksChange用の再取得：デバウンス + 中断対応 + 差分マージ
+  const refreshAbortRef = useRef<AbortController | null>(null)
+
+  const mergeTasksById = useCallback((current: TaskResponse[], incoming: TaskResponse[]): TaskResponse[] => {
+    const currentMap = new Map(current.map(t => [t.id, t]))
+    // サーバー順（order）に従う
+    return incoming.map(next => {
+      const prev = currentMap.get(next.id)
+      if (!prev) return next
+      // 主要フィールドに変化がなければ参照を保つ（再レンダリング抑制）
+      const same = (
+        prev.title === next.title &&
+        prev.assignee === next.assignee &&
+        prev.plannedStart === next.plannedStart &&
+        prev.plannedEnd === next.plannedEnd &&
+        prev.order === next.order &&
+        prev.completedAt === next.completedAt
+      )
+      return same ? prev : next
+    })
+  }, [])
+
+  const refetchProjectNow = useCallback(async () => {
+    try {
+      // 直前のリクエストを中断
+      if (refreshAbortRef.current) {
+        refreshAbortRef.current.abort()
+      }
+      const controller = new AbortController()
+      refreshAbortRef.current = controller
+
+      const response = await fetch(`/api/projects/${projectId}`, {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache' },
+        signal: controller.signal
+      })
+      if (!response.ok) return
+      const projectData: ProjectWithTasksResponse = await response.json()
+      setProject(projectData)
+      setTasks(prev => mergeTasksById(prev, projectData.tasks))
+    } catch {
+      // 中断は無視
+    }
+  }, [projectId, mergeTasksById])
+
+  const refetchProjectDebounced = useDebounce(refetchProjectNow, 500)
 
   const fetchProject = useCallback(async () => {
     try {
@@ -94,7 +142,8 @@ export default function GanttPage() {
   }, [taskFormOpen])
 
   const handleTasksChange = () => {
-    fetchProject() // プロジェクトとタスクを再取得
+    // 連続更新をまとめて再取得
+    refetchProjectDebounced()
   }
 
   // 楽観的UI更新：特定のタスクのみローカル状態で更新

@@ -100,12 +100,33 @@ export async function PATCH(
     if (body.title) updateData.title = body.title
     if (body.assignee) updateData.assignee = body.assignee
     if (body.plannedStart) {
-      // YYYY-MM-DD形式の文字列をUTC 00:00:00として処理
-      updateData.plannedStart = new Date(body.plannedStart + 'T00:00:00.000Z')
+      // ISO形式を最優先、YYYY-MM-DDでも受けつける
+      const raw = body.plannedStart
+      const startDateStr = typeof raw === 'string' && raw.includes('T')
+        ? raw
+        : `${raw}T00:00:00.000Z`
+      const startDate = new Date(startDateStr)
+      if (isNaN(startDate.getTime())) {
+        return NextResponse.json(
+          { error: 'Invalid plannedStart date format', received: body.plannedStart },
+          { status: 400 }
+        )
+      }
+      updateData.plannedStart = startDate
     }
     if (body.plannedEnd) {
-      // YYYY-MM-DD形式の文字列をUTC 00:00:00として処理
-      updateData.plannedEnd = new Date(body.plannedEnd + 'T00:00:00.000Z')
+      const raw = body.plannedEnd
+      const endDateStr = typeof raw === 'string' && raw.includes('T')
+        ? raw
+        : `${raw}T00:00:00.000Z`
+      const endDate = new Date(endDateStr)
+      if (isNaN(endDate.getTime())) {
+        return NextResponse.json(
+          { error: 'Invalid plannedEnd date format', received: body.plannedEnd },
+          { status: 400 }
+        )
+      }
+      updateData.plannedEnd = endDate
     }
     if (body.order !== undefined) updateData.order = body.order
 
