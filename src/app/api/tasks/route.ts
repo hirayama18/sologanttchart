@@ -31,8 +31,8 @@ export async function POST(request: NextRequest) {
     const taskData = {
       title: body.title,
       assignee: body.assignee,
-      plannedStart: new Date(body.plannedStart + (body.plannedStart.includes('T') ? '' : 'T00:00:00.000Z')),
-      plannedEnd: new Date(body.plannedEnd + (body.plannedEnd.includes('T') ? '' : 'T00:00:00.000Z')),
+      plannedStart: new Date(body.plannedStart + (body.plannedStart.includes('T') ? '' : 'T00:00:00')),
+      plannedEnd: new Date(body.plannedEnd + (body.plannedEnd.includes('T') ? '' : 'T00:00:00')),
       projectId: body.projectId,
       // orderはDALで自動計算されるため、明示的に指定しない
       // これにより新規タスクは必ず一番下に配置される

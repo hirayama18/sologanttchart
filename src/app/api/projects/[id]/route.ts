@@ -42,8 +42,8 @@ export async function GET(
     const response: ProjectWithTasksResponse = {
       id: project.id,
       title: project.title,
-      startDate: project.startDate.toISOString(),
-      endDate: project.endDate ? project.endDate.toISOString() : null,
+      startDate: new Date(project.startDate.getFullYear(), project.startDate.getMonth(), project.startDate.getDate()).toISOString(),
+      endDate: project.endDate ? new Date(project.endDate.getFullYear(), project.endDate.getMonth(), project.endDate.getDate()).toISOString() : null,
       userId: project.userId,
       createdAt: project.createdAt.toISOString(),
       updatedAt: project.updatedAt.toISOString(),
@@ -110,16 +110,16 @@ export async function PATCH(
     
     const updateData: Partial<{ title: string; startDate: Date; endDate: Date | null }> = {}
     if (body.title) updateData.title = body.title
-    if (body.startDate) updateData.startDate = new Date(body.startDate)
-    if (body.endDate !== undefined) updateData.endDate = body.endDate ? new Date(body.endDate) : null
+    if (body.startDate) updateData.startDate = new Date(body.startDate + (body.startDate.includes('T') ? '' : 'T00:00:00'))
+    if (body.endDate !== undefined) updateData.endDate = body.endDate ? new Date(body.endDate + (body.endDate.includes('T') ? '' : 'T00:00:00')) : null
 
     const project = await ProjectDAL.update(id, updateData)
     
     const response: ProjectWithTasksResponse = {
       id: project.id,
       title: project.title,
-      startDate: project.startDate.toISOString(),
-      endDate: project.endDate ? project.endDate.toISOString() : null,
+      startDate: new Date(project.startDate.getFullYear(), project.startDate.getMonth(), project.startDate.getDate()).toISOString(),
+      endDate: project.endDate ? new Date(project.endDate.getFullYear(), project.endDate.getMonth(), project.endDate.getDate()).toISOString() : null,
       userId: project.userId,
       createdAt: project.createdAt.toISOString(),
       updatedAt: project.updatedAt.toISOString(),
@@ -127,8 +127,8 @@ export async function PATCH(
         id: task.id,
         title: task.title,
         assignee: task.assignee,
-        plannedStart: task.plannedStart.toISOString(),
-        plannedEnd: task.plannedEnd.toISOString(),
+        plannedStart: new Date(task.plannedStart.getFullYear(), task.plannedStart.getMonth(), task.plannedStart.getDate()).toISOString(),
+        plannedEnd: new Date(task.plannedEnd.getFullYear(), task.plannedEnd.getMonth(), task.plannedEnd.getDate()).toISOString(),
         order: task.order,
         deleted: task.deleted,
         projectId: task.projectId,

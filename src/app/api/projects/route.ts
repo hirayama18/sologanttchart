@@ -18,15 +18,21 @@ export async function GET() {
     const { ProjectDAL } = await import('@/dal/projects')
     const projects = await ProjectDAL.getByUserId(userId)
     
-    const response: ProjectResponse[] = projects.map(project => ({
-      id: project.id,
-      title: project.title,
-      startDate: project.startDate.toISOString(),
-      endDate: project.endDate ? project.endDate.toISOString() : null,
-      userId: project.userId,
-      createdAt: project.createdAt.toISOString(),
-      updatedAt: project.updatedAt.toISOString()
-    }))
+    const response: ProjectResponse[] = projects.map(project => {
+      const s = new Date(project.startDate.getFullYear(), project.startDate.getMonth(), project.startDate.getDate()).toISOString()
+      const e = project.endDate
+        ? new Date(project.endDate.getFullYear(), project.endDate.getMonth(), project.endDate.getDate()).toISOString()
+        : null
+      return {
+        id: project.id,
+        title: project.title,
+        startDate: s,
+        endDate: e,
+        userId: project.userId,
+        createdAt: project.createdAt.toISOString(),
+        updatedAt: project.updatedAt.toISOString()
+      }
+    })
 
     return NextResponse.json(response)
   } catch (error) {
@@ -52,8 +58,8 @@ export async function POST(request: NextRequest) {
     const { ProjectDAL } = await import('@/dal/projects')
     const projectData = {
       title: body.title,
-      startDate: new Date(body.startDate),
-      endDate: body.endDate ? new Date(body.endDate) : null,
+      startDate: new Date(body.startDate + (body.startDate.includes('T') ? '' : 'T00:00:00')),
+      endDate: body.endDate ? new Date(body.endDate + (body.endDate.includes('T') ? '' : 'T00:00:00')) : null,
       userId
     }
 
@@ -62,8 +68,8 @@ export async function POST(request: NextRequest) {
     const response: ProjectResponse = {
       id: project.id,
       title: project.title,
-      startDate: project.startDate.toISOString(),
-      endDate: project.endDate ? project.endDate.toISOString() : null,
+      startDate: new Date(project.startDate.getFullYear(), project.startDate.getMonth(), project.startDate.getDate()).toISOString(),
+      endDate: project.endDate ? new Date(project.endDate.getFullYear(), project.endDate.getMonth(), project.endDate.getDate()).toISOString() : null,
       userId: project.userId,
       createdAt: project.createdAt.toISOString(),
       updatedAt: project.updatedAt.toISOString()

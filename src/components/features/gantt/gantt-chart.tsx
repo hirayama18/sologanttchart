@@ -9,6 +9,31 @@ import { useOptimizedTaskUpdate } from '@/hooks/useOptimizedTaskUpdate'
 import { getAssigneeColorWithSettings } from '@/lib/colors'
 import { ColorLegend } from './color-legend'
 
+// ローカル日付(年-月-日)として扱うためのユーティリティ
+function parseDateOnlyToLocal(input: string | Date): Date {
+  if (input instanceof Date) {
+    return new Date(input.getFullYear(), input.getMonth(), input.getDate())
+  }
+  // ISOやその他の文字列を一度Dateに通してローカル日に正規化
+  const temp = new Date(input)
+  if (!isNaN(temp.getTime())) {
+    return new Date(temp.getFullYear(), temp.getMonth(), temp.getDate())
+  }
+  // フォールバック: 明示的にYYYY-MM-DDを分解
+  const s = input.slice(0, 10)
+  const year = Number(s.slice(0, 4))
+  const month = Number(s.slice(5, 7)) - 1
+  const day = Number(s.slice(8, 10))
+  return new Date(year, month, day)
+}
+
+function formatAsYmd(date: Date): string {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
 // ドラッグ状態の型定義
 type DragState = {
   taskId: string
@@ -39,8 +64,8 @@ const TaskBar = memo(({ task, visibleDates, dragState, DAY_WIDTH_PX, onMouseDown
     const visibleEnd = visibleDates[visibleDates.length - 1]
 
     // すべて日単位に正規化してタイムゾーン起因のズレを排除
-    const baseStart = startOfDay(new Date(task.plannedStart))
-    const baseEnd = startOfDay(new Date(task.plannedEnd))
+    const baseStart = startOfDay(parseDateOnlyToLocal(task.plannedStart))
+    const baseEnd = startOfDay(parseDateOnlyToLocal(task.plannedEnd))
 
     // ドラッグ中はプレビューの期間を採用
     const isDragging = dragState && dragState.taskId === task.id
@@ -192,12 +217,12 @@ export function GanttChart({ project, tasks, onTasksChange, onEditTask, onTaskUp
   }, [getQueueStatus])
 
   // プロジェクト開始日（ローカル日単位に正規化）
-  const projectStartDay = useMemo(() => startOfDay(new Date(project.startDate)), [project.startDate])
+  const projectStartDay = useMemo(() => startOfDay(parseDateOnlyToLocal(project.startDate)), [project.startDate])
 
   // 表示ウィンドウ（プロジェクト開始から6ヶ月 = 約180日）
   const visibleDates = useMemo(() => {
     const start = projectStartDay
-    const end = project.endDate ? startOfDay(new Date(project.endDate)) : addDays(start, 6 * 30 - 1)
+    const end = project.endDate ? startOfDay(parseDateOnlyToLocal(project.endDate)) : addDays(start, 6 * 30 - 1)
     const dates: Date[] = []
     let current = start
     while (current <= end) {
@@ -307,10 +332,10 @@ export function GanttChart({ project, tasks, onTasksChange, onEditTask, onTaskUp
       taskId,
       type: dragType,
       startClientX: event.clientX,
-      originalStart: startOfDay(new Date(task.plannedStart)),
-      originalEnd: startOfDay(new Date(task.plannedEnd)),
-      previewStart: startOfDay(new Date(task.plannedStart)),
-      previewEnd: startOfDay(new Date(task.plannedEnd)),
+      originalStart: startOfDay(parseDateOnlyToLocal(task.plannedStart)),
+      originalEnd: startOfDay(parseDateOnlyToLocal(task.plannedEnd)),
+      previewStart: startOfDay(parseDateOnlyToLocal(task.plannedStart)),
+      previewEnd: startOfDay(parseDateOnlyToLocal(task.plannedEnd)),
     })
   }, [tasks])
 
@@ -367,10 +392,10 @@ export function GanttChart({ project, tasks, onTasksChange, onEditTask, onTaskUp
       const originalStartISO = dragState.originalStart.toISOString()
       const originalEndISO = dragState.originalEnd.toISOString()
       
-      // API更新データ（ISO形式・念のためUTC日付に正規化）
+      // API更新データ（YYYY-MM-DDで送信し、サーバー側でローカル深夜に固定）
       const apiUpdateData = {
-        plannedStart: new Date(dragState.previewStart).toISOString(),
-        plannedEnd: new Date(dragState.previewEnd).toISOString(),
+        plannedStart: formatAsYmd(dragState.previewStart),
+        plannedEnd: formatAsYmd(dragState.previewEnd),
       }
       
       // UI更新データ（ISO形式）
@@ -478,7 +503,7 @@ export function GanttChart({ project, tasks, onTasksChange, onEditTask, onTaskUp
 
       <div className="flex">
         {/* タスク一覧部分 */}
-        <div className="w-80 border-r bg-gray-50">
+        <div className="w-72 xl:w-80 border-r bg-gray-50">
           {/* タスクリストヘッダー（ガントヘッダーと同じ高さに統一） */}
           <div className="h-16 border-b bg-white font-semibold flex items-center px-4">
             タスク

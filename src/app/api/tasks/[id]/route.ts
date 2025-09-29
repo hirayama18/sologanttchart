@@ -102,10 +102,9 @@ export async function PATCH(
     if (body.plannedStart) {
       // ISO形式を最優先、YYYY-MM-DDでも受けつける
       const raw = body.plannedStart
-      const startDateStr = typeof raw === 'string' && raw.includes('T')
-        ? raw
-        : `${raw}T00:00:00.000Z`
-      const startDate = new Date(startDateStr)
+      const startDate = typeof raw === 'string' && raw.includes('T')
+        ? new Date(raw)
+        : new Date(raw as string + 'T00:00:00') // ローカル深夜
       if (isNaN(startDate.getTime())) {
         return NextResponse.json(
           { error: 'Invalid plannedStart date format', received: body.plannedStart },
@@ -116,10 +115,9 @@ export async function PATCH(
     }
     if (body.plannedEnd) {
       const raw = body.plannedEnd
-      const endDateStr = typeof raw === 'string' && raw.includes('T')
-        ? raw
-        : `${raw}T00:00:00.000Z`
-      const endDate = new Date(endDateStr)
+      const endDate = typeof raw === 'string' && raw.includes('T')
+        ? new Date(raw)
+        : new Date(raw as string + 'T00:00:00') // ローカル深夜
       if (isNaN(endDate.getTime())) {
         return NextResponse.json(
           { error: 'Invalid plannedEnd date format', received: body.plannedEnd },
@@ -176,8 +174,8 @@ export async function PATCH(
       id: task.id,
       title: task.title,
       assignee: task.assignee,
-      plannedStart: task.plannedStart.toISOString(),
-      plannedEnd: task.plannedEnd.toISOString(),
+      plannedStart: new Date(task.plannedStart.getFullYear(), task.plannedStart.getMonth(), task.plannedStart.getDate()).toISOString(),
+      plannedEnd: new Date(task.plannedEnd.getFullYear(), task.plannedEnd.getMonth(), task.plannedEnd.getDate()).toISOString(),
       order: task.order,
       deleted: task.deleted,
       projectId: task.projectId,

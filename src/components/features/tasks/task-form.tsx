@@ -65,13 +65,13 @@ export function TaskForm({ open, onOpenChange, onTaskCreated, projectId, task, o
   // taskが変更されたときにフォームデータを更新
   useEffect(() => {
     if (task) {
-      // 編集モード: タスクの現在値を設定
+      // 編集モード: タスクの現在値を設定（ローカル日付として扱う）
       setFormData({
         title: task.title,
         assignee: task.assignee,
-        plannedStart: new Date(task.plannedStart).toISOString().split('T')[0],
-        plannedEnd: new Date(task.plannedEnd).toISOString().split('T')[0],
-        completedAt: task.completedAt ? new Date(task.completedAt).toISOString().split('T')[0] : ''
+        plannedStart: task.plannedStart.slice(0, 10),
+        plannedEnd: task.plannedEnd.slice(0, 10),
+        completedAt: task.completedAt ? task.completedAt.slice(0, 10) : ''
       })
     } else {
       // 新規作成モード: 初期値を設定

@@ -113,8 +113,9 @@ export default function GanttPage() {
     if (project) {
       setProjectForm({
         title: project.title,
-        startDate: new Date(project.startDate).toISOString().split('T')[0],
-        endDate: project.endDate ? new Date(project.endDate).toISOString().split('T')[0] : '',
+        // ローカル日付として扱う（YYYY-MM-DD）
+        startDate: project.startDate.slice(0, 10),
+        endDate: project.endDate ? project.endDate.slice(0, 10) : '',
       })
     }
   }, [project])
@@ -231,7 +232,7 @@ export default function GanttPage() {
     <div className="min-h-screen bg-gray-50">
       {/* ヘッダー */}
       <header className="bg-white border-b">
-        <div className="container mx-auto px-4 py-4">
+        <div className="w-full px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
               <Button
@@ -301,7 +302,7 @@ export default function GanttPage() {
       </header>
 
       {/* メインコンテンツ（ガントチャートに統一） */}
-      <main className="container mx-auto px-4 py-6">
+      <main className="w-full px-4 py-6">
         <div className="space-y-6">
           {editingProject && (
             <div className="bg-white border rounded-lg p-4 flex items-center gap-4">
@@ -336,8 +337,9 @@ export default function GanttPage() {
                   try {
                     const payload: { title?: string; startDate: string; endDate: string | null } = {
                       title: projectForm.title?.trim() ? projectForm.title : undefined,
-                      startDate: new Date(projectForm.startDate).toISOString(),
-                      endDate: projectForm.endDate ? new Date(projectForm.endDate).toISOString() : null,
+                      // サーバー側はISOで受けるが、ローカル日をUTCずれなくISOにする
+                      startDate: new Date(projectForm.startDate + 'T00:00:00').toISOString(),
+                      endDate: projectForm.endDate ? new Date(projectForm.endDate + 'T00:00:00').toISOString() : null,
                     }
                     const res = await fetch(`/api/projects/${projectId}`, {
                       method: 'PATCH',

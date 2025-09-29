@@ -10,6 +10,22 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 export const revalidate = false
 
+// ローカルのカレンダー日（YYYY-MM-DD）として扱うユーティリティ
+function parseDateOnlyToLocal(input: string | Date): Date {
+  if (input instanceof Date) {
+    return new Date(input.getFullYear(), input.getMonth(), input.getDate())
+  }
+  const maybe = new Date(input)
+  if (!isNaN(maybe.getTime())) {
+    return new Date(maybe.getFullYear(), maybe.getMonth(), maybe.getDate())
+  }
+  const s = (input as string).slice(0, 10)
+  const y = Number(s.slice(0, 4))
+  const m = Number(s.slice(5, 7)) - 1
+  const d = Number(s.slice(8, 10))
+  return new Date(y, m, d)
+}
+
 export async function POST(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -51,9 +67,9 @@ export async function POST(
   const workbook = new ExcelJS.Workbook()
   const sheet = workbook.addWorksheet('Gantt')
 
-  // 設定
-  const startDate = startOfDay(new Date(project.startDate))
-  const endDate = project.endDate ? startOfDay(new Date(project.endDate)) : addDays(startDate, 6 * 30 - 1)
+  // 設定（ローカル日付で統一）
+  const startDate = startOfDay(parseDateOnlyToLocal(project.startDate))
+  const endDate = project.endDate ? startOfDay(parseDateOnlyToLocal(project.endDate)) : addDays(startDate, 6 * 30 - 1)
   const totalDays = Math.max(1, Math.floor((endDate.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000)) + 1)
 
   // タイトル・情報
@@ -100,7 +116,7 @@ export async function POST(
 
   // 日行
   for (let i = 0; i < totalDays; i += 1) {
-    const d = addDays(startOfDay(startDate), i)
+    const d = addDays(startDate, i)
     const col = 4 + i  // 日付列の開始位置を変更
     sheet.getCell(headerOffset + 1, col).value = d.getDate()
     sheet.getCell(headerOffset + 1, col).alignment = { horizontal: 'center' }
@@ -108,7 +124,7 @@ export async function POST(
 
   // 曜日行
   for (let i = 0; i < totalDays; i += 1) {
-    const d = addDays(startOfDay(startDate), i)
+    const d = addDays(startDate, i)
     const col = 4 + i  // 日付列の開始位置を変更
     const dayOfWeekShort = format(d, 'EEE', { locale: ja })
     sheet.getCell(headerOffset + 2, col).value = dayOfWeekShort
@@ -163,9 +179,9 @@ export async function POST(
     const row = sheet.getRow(rowIndex)
     row.getCell(1).value = t.title
     
-    // 完了日の表示
+    // 完了日の表示（ローカル日付）
     if (t.completedAt) {
-      row.getCell(2).value = format(new Date(t.completedAt), 'yyyy/MM/dd')
+      row.getCell(2).value = format(parseDateOnlyToLocal(t.completedAt), 'yyyy/MM/dd')
     } else {
       row.getCell(2).value = ''
     }
@@ -174,11 +190,11 @@ export async function POST(
 
     const startOffset = Math.max(
       0,
-      Math.floor((startOfDay(new Date(t.plannedStart)).getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000))
+      Math.floor((startOfDay(parseDateOnlyToLocal(t.plannedStart)).getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000))
     )
     const endOffset = Math.min(
       totalDays - 1,
-      Math.floor((startOfDay(new Date(t.plannedEnd)).getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000))
+      Math.floor((startOfDay(parseDateOnlyToLocal(t.plannedEnd)).getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000))
     )
     const fromCol = 4 + startOffset  // 日付列の開始位置を変更
     const toCol = 4 + endOffset
