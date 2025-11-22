@@ -5,6 +5,7 @@ export interface CreateProjectRequest {
   title: string
   startDate: string // ISO string
   endDate?: string | null
+  timeScale?: 'DAY' | 'WEEK'
 }
 
 export interface UpdateProjectRequest {
@@ -28,6 +29,7 @@ export interface ProjectResponse {
   userId: string
   createdAt: string
   updatedAt: string
+  timeScale: 'DAY' | 'WEEK'
 }
 
 export interface ProjectWithTasksResponse extends ProjectResponse {

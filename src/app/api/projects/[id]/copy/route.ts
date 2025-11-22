@@ -47,6 +47,7 @@ export async function POST(
       userId: project.userId,
       createdAt: project.createdAt.toISOString(),
       updatedAt: project.updatedAt.toISOString(),
+      timeScale: project.timeScale,
       tasks: project.tasks.map(task => ({
         id: task.id,
         title: task.title,

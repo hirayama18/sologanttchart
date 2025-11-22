@@ -17,10 +17,16 @@ export function CreateProjectForm({ onProjectCreated }: CreateProjectFormProps) 
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [projects, setProjects] = useState<ProjectResponse[]>([])
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    title: string
+    startDate: string
+    sourceProjectId: string
+    timeScale: 'DAY' | 'WEEK'
+  }>({
     title: '',
     startDate: new Date().toISOString().split('T')[0], // 今日の日付をデフォルトに
-    sourceProjectId: '' // コピー元プロジェクト
+    sourceProjectId: '', // コピー元プロジェクト
+    timeScale: 'DAY'
   })
 
   // プロジェクト一覧を取得
@@ -68,7 +74,8 @@ export function CreateProjectForm({ onProjectCreated }: CreateProjectFormProps) 
         // 新規プロジェクトを作成
         const requestData: CreateProjectRequest = {
           title: formData.title,
-          startDate: new Date(formData.startDate).toISOString()
+          startDate: new Date(formData.startDate).toISOString(),
+          timeScale: formData.timeScale
         }
 
         response = await fetch('/api/projects', {
@@ -87,7 +94,8 @@ export function CreateProjectForm({ onProjectCreated }: CreateProjectFormProps) 
         setFormData({
           title: '',
           startDate: new Date().toISOString().split('T')[0],
-          sourceProjectId: ''
+          sourceProjectId: '',
+          timeScale: 'DAY'
         })
       } else {
         console.error('Failed to create project')
@@ -165,6 +173,24 @@ export function CreateProjectForm({ onProjectCreated }: CreateProjectFormProps) 
                 placeholder="例: Webサイトリニューアル"
                 required
               />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="timeScale" className="text-right">
+                表示単位
+              </Label>
+              <Select 
+                value={formData.timeScale} 
+                onValueChange={(value: 'DAY' | 'WEEK') => handleInputChange('timeScale', value)}
+                disabled={!!formData.sourceProjectId}
+              >
+                <SelectTrigger className="col-span-3">
+                  <SelectValue placeholder="表示単位を選択" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="DAY">日単位</SelectItem>
+                  <SelectItem value="WEEK">週単位</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="startDate" className="text-right">

@@ -18,6 +18,7 @@ export type CreateProjectData = {
   startDate: Date
   endDate?: Date | null
   userId: string
+  timeScale?: 'DAY' | 'WEEK'
 }
 
 export type UpdateProjectData = Partial<Omit<CreateProjectData, 'userId'>>

@@ -237,7 +237,8 @@ export function GanttChart({ project, tasks, onTasksChange, onEditTask, onTaskUp
   }, [projectStartDay, project.endDate])
 
   // 1日あたりの描画幅（px）- メモ化
-  const DAY_WIDTH_PX = useMemo(() => 32, [])
+  const isWeekly = project.timeScale === 'WEEK'
+  const DAY_WIDTH_PX = useMemo(() => isWeekly ? 7.2 : 32, [isWeekly]) // 週単位なら1週間で約50px (7.2 * 7 = 50.4)
   const timelineWidthPx = useMemo(() => visibleDates.length * DAY_WIDTH_PX, [visibleDates.length, DAY_WIDTH_PX])
 
   // ドラッグ状態
@@ -466,6 +467,63 @@ export function GanttChart({ project, tasks, onTasksChange, onEditTask, onTaskUp
     return segments
   }, [visibleDates])
 
+  // 年ごとのセグメント（週表示用）
+  const yearSegments = useMemo(() => {
+    type Segment = { startIndex: number; span: number; label: string }
+    const segments: Segment[] = []
+    if (visibleDates.length === 0) return segments
+    let i = 0
+    while (i < visibleDates.length) {
+      const current = visibleDates[i]
+      const currentYear = current.getFullYear()
+      let span = 0
+      while (
+        i + span < visibleDates.length &&
+        visibleDates[i + span].getFullYear() === currentYear
+      ) {
+        span += 1
+      }
+      segments.push({
+        startIndex: i,
+        span,
+        label: `${currentYear}年`,
+      })
+      i += span
+    }
+    return segments
+  }, [visibleDates])
+
+  // 週ごとのセグメント（週表示用）
+  const weekSegments = useMemo(() => {
+    type Segment = { startIndex: number; span: number; label: string }
+    const segments: Segment[] = []
+    if (visibleDates.length === 0) return segments
+    
+    let i = 0
+    while (i < visibleDates.length) {
+      const current = visibleDates[i]
+      // 週の区切りを探す（次の月曜日まで）
+      let span = 0
+      // 最初の要素は無条件で開始。それ以降は月曜日で区切る
+      while (i + span < visibleDates.length) {
+        const date = visibleDates[i + span]
+        // 最初の要素以外で月曜日ならブレイク
+        if (span > 0 && date.getDay() === 1) break
+        span++
+      }
+
+      // ラベル: その週の月曜日（または範囲開始日）の日付
+      // 週またぎの月については月曜日時点の月で考える -> currentがその役割
+      segments.push({
+        startIndex: i,
+        span,
+        label: `${format(current, 'd', { locale: ja })}〜`,
+      })
+      i += span
+    }
+    return segments
+  }, [visibleDates])
+
   // 担当者別の色を取得（TaskBarコンポーネント用）
   const getAssigneeColor = useCallback((assignee: string) => {
     const color = getAssigneeColorWithSettings(assignee, false, colorSettings)
@@ -544,7 +602,9 @@ export function GanttChart({ project, tasks, onTasksChange, onEditTask, onTaskUp
         {/* タスク一覧部分 */}
         <div className="w-72 xl:w-80 border-r bg-gray-50">
           {/* タスクリストヘッダー（ガントヘッダーと同じ高さに統一） */}
-          <div className="h-16 border-b bg-white font-semibold flex items-center px-4">
+          <div
+            className={`${project.timeScale === 'WEEK' ? 'h-[4.5rem]' : 'h-16'} border-b bg-white font-semibold flex items-center px-4`}
+          >
             タスク
           </div>
           
@@ -780,57 +840,109 @@ export function GanttChart({ project, tasks, onTasksChange, onEditTask, onTaskUp
 
         {/* ガントチャート部分 */}
         <div className="flex-1 overflow-x-auto">
-          {/* 日付ヘッダー（上段: 月セグメント、下段: 日と曜日） */}
+          {/* 日付ヘッダー */}
           <div className="border-b bg-white" style={{ width: `${timelineWidthPx}px` }}>
-            {/* 月セグメント行 */}
-            <div
-              className="h-6 grid text-center text-xs"
-              style={{ gridTemplateColumns: `repeat(${visibleDates.length}, ${DAY_WIDTH_PX}px)` }}
-            >
-              {monthSegments.map((seg, idx) => (
+            {isWeekly ? (
+              <>
+                {/* 年行 */}
                 <div
-                  key={idx}
-                  className="border-r flex items-center justify-center font-medium"
-                  style={{ gridColumn: `${seg.startIndex + 1} / span ${seg.span}` }}
+                  className="h-6 grid text-center text-xs border-b"
+                  style={{ gridTemplateColumns: `repeat(${visibleDates.length}, ${DAY_WIDTH_PX}px)` }}
                 >
-                  {seg.label}
+                  {yearSegments.map((seg, idx) => (
+                    <div
+                      key={idx}
+                      className="border-r flex items-center justify-center font-medium bg-gray-50"
+                      style={{ gridColumn: `${seg.startIndex + 1} / span ${seg.span}` }}
+                    >
+                      {seg.label}
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+                {/* 月行 */}
+                <div
+                  className="h-6 grid text-center text-xs border-b"
+                  style={{ gridTemplateColumns: `repeat(${visibleDates.length}, ${DAY_WIDTH_PX}px)` }}
+                >
+                  {monthSegments.map((seg, idx) => (
+                    <div
+                      key={idx}
+                      className="border-r flex items-center justify-center font-medium"
+                      style={{ gridColumn: `${seg.startIndex + 1} / span ${seg.span}` }}
+                    >
+                      {seg.label}
+                    </div>
+                  ))}
+                </div>
+                {/* 週行 */}
+                <div
+                  className="h-6 grid text-center text-xs"
+                  style={{ gridTemplateColumns: `repeat(${visibleDates.length}, ${DAY_WIDTH_PX}px)` }}
+                >
+                  {weekSegments.map((seg, idx) => (
+                    <div
+                      key={idx}
+                      className="border-r flex items-center justify-center text-[10px] text-gray-600"
+                      style={{ gridColumn: `${seg.startIndex + 1} / span ${seg.span}` }}
+                    >
+                      {seg.label}
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <>
+                {/* 月セグメント行 */}
+                <div
+                  className="h-6 grid text-center text-xs"
+                  style={{ gridTemplateColumns: `repeat(${visibleDates.length}, ${DAY_WIDTH_PX}px)` }}
+                >
+                  {monthSegments.map((seg, idx) => (
+                    <div
+                      key={idx}
+                      className="border-r flex items-center justify-center font-medium"
+                      style={{ gridColumn: `${seg.startIndex + 1} / span ${seg.span}` }}
+                    >
+                      {seg.label}
+                    </div>
+                  ))}
+                </div>
 
-            {/* 日+曜日行 */}
-            <div
-              className="h-10 grid"
-              style={{ gridTemplateColumns: `repeat(${visibleDates.length}, ${DAY_WIDTH_PX}px)` }}
-            >
-              {visibleDates.map((date, index) => {
-                const isToday = format(date, 'yyyy-MM-dd') === format(today, 'yyyy-MM-dd')
-                const holidayName = isJapaneseHoliday(date)
-                const isHoliday = !!holidayName
-                const isWeekendDay = isWeekend(date)
-                
-                // 背景色の優先順位: 今日 > 祝日 > 週末
-                let bgClass = ''
-                if (isToday) {
-                  bgClass = 'bg-yellow-100'
-                } else if (isHoliday) {
-                  bgClass = 'bg-pink-50'
-                } else if (isWeekendDay) {
-                  bgClass = 'bg-blue-50'
-                }
-                
-                return (
-                  <div
-                    key={index}
-                    className={`border-r text-center text-xs p-1 flex flex-col items-center justify-center leading-tight ${bgClass}`}
-                    title={holidayName ? holidayName : undefined}
-                  >
-                    <div className="text-sm font-semibold">{format(date, 'd', { locale: ja })}</div>
-                    <div className="text-[10px] text-gray-500">{format(date, 'EEE', { locale: ja })}</div>
-                  </div>
-                )
-              })}
-            </div>
+                {/* 日+曜日行 */}
+                <div
+                  className="h-10 grid"
+                  style={{ gridTemplateColumns: `repeat(${visibleDates.length}, ${DAY_WIDTH_PX}px)` }}
+                >
+                  {visibleDates.map((date, index) => {
+                    const isToday = format(date, 'yyyy-MM-dd') === format(today, 'yyyy-MM-dd')
+                    const holidayName = isJapaneseHoliday(date)
+                    const isHoliday = !!holidayName
+                    const isWeekendDay = isWeekend(date)
+                    
+                    // 背景色の優先順位: 今日 > 祝日 > 週末
+                    let bgClass = ''
+                    if (isToday) {
+                      bgClass = 'bg-yellow-100'
+                    } else if (isHoliday) {
+                      bgClass = 'bg-pink-50'
+                    } else if (isWeekendDay) {
+                      bgClass = 'bg-blue-50'
+                    }
+                    
+                    return (
+                      <div
+                        key={index}
+                        className={`border-r text-center text-xs p-1 flex flex-col items-center justify-center leading-tight ${bgClass}`}
+                        title={holidayName ? holidayName : undefined}
+                      >
+                        <div className="text-sm font-semibold">{format(date, 'd', { locale: ja })}</div>
+                        <div className="text-[10px] text-gray-500">{format(date, 'EEE', { locale: ja })}</div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </>
+            )}
           </div>
 
           {/* ガントバー（タイムライン幅を固定pxで管理） */}
@@ -856,11 +968,16 @@ export function GanttChart({ project, tasks, onTasksChange, onEditTask, onTaskUp
                 } else if (isWeekendDay) {
                   bgClass = 'bg-blue-50/50'
                 }
+
+                // 週単位表示の場合、日曜日の右側のみボーダーを表示（ただし最終列は常にボーダー）
+                const showBorder = isWeekly 
+                  ? (date.getDay() === 0 || index === visibleDates.length - 1) 
+                  : true
                 
                 return (
                   <div
                     key={index}
-                    className={`border-r ${bgClass}`}
+                    className={`${showBorder ? 'border-r' : ''} ${bgClass}`}
                   />
                 )
               })}

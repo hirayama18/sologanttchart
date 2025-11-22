@@ -30,7 +30,8 @@ export async function GET() {
         endDate: e,
         userId: project.userId,
         createdAt: project.createdAt.toISOString(),
-        updatedAt: project.updatedAt.toISOString()
+        updatedAt: project.updatedAt.toISOString(),
+        timeScale: project.timeScale
       }
     })
 
@@ -60,7 +61,8 @@ export async function POST(request: NextRequest) {
       title: body.title,
       startDate: new Date(body.startDate + (body.startDate.includes('T') ? '' : 'T00:00:00')),
       endDate: body.endDate ? new Date(body.endDate + (body.endDate.includes('T') ? '' : 'T00:00:00')) : null,
-      userId
+      userId,
+      timeScale: body.timeScale || 'DAY'
     }
 
     const project = await ProjectDAL.create(projectData)
@@ -72,7 +74,8 @@ export async function POST(request: NextRequest) {
       endDate: project.endDate ? new Date(project.endDate.getFullYear(), project.endDate.getMonth(), project.endDate.getDate()).toISOString() : null,
       userId: project.userId,
       createdAt: project.createdAt.toISOString(),
-      updatedAt: project.updatedAt.toISOString()
+      updatedAt: project.updatedAt.toISOString(),
+      timeScale: project.timeScale
     }
 
     return NextResponse.json(response, { status: 201 })

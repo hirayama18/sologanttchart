@@ -93,7 +93,10 @@ export class ProjectDAL {
 
       // 新しいプロジェクトを作成
       const newProject = await tx.project.create({
-        data: newProjectData,
+        data: {
+          ...newProjectData,
+          timeScale: newProjectData.timeScale ?? sourceProject.timeScale,
+        },
         include: {
           tasks: true,
           assigneeOptions: true,

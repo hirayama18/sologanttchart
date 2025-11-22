@@ -47,6 +47,7 @@ export async function GET(
       userId: project.userId,
       createdAt: project.createdAt.toISOString(),
       updatedAt: project.updatedAt.toISOString(),
+      timeScale: project.timeScale,
         tasks: project.tasks.map(task => {
           const completedAtValue = task.completedAt ? task.completedAt.toISOString() : null
           // デバッグ用ログ
@@ -124,6 +125,7 @@ export async function PATCH(
       userId: project.userId,
       createdAt: project.createdAt.toISOString(),
       updatedAt: project.updatedAt.toISOString(),
+      timeScale: project.timeScale,
       tasks: project.tasks.map(task => ({
         id: task.id,
         title: task.title,

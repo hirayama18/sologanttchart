@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { addDays, format, startOfDay } from 'date-fns'
+import { addDays, format, startOfDay, startOfWeek } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import ExcelJS from 'exceljs'
 import { getAuthenticatedUserId, isAuthError } from '@/lib/auth'
@@ -25,6 +25,53 @@ function parseDateOnlyToLocal(input: string | Date): Date {
   const m = Number(s.slice(5, 7)) - 1
   const d = Number(s.slice(8, 10))
   return new Date(y, m, d)
+}
+
+const MS_PER_DAY = 24 * 60 * 60 * 1000
+
+const toMonthKey = (date: Date): string => `${date.getFullYear()}-${date.getMonth()}`
+
+type TimelineUnit = {
+  start: Date
+  end: Date
+  label: string
+  weekdayLabel?: string
+  monthKey: string
+}
+
+function buildTimelineUnits(startDate: Date, endDate: Date, isWeekly: boolean): TimelineUnit[] {
+  const units: TimelineUnit[] = []
+
+  if (isWeekly) {
+    let weekCursor = startOfWeek(startDate, { weekStartsOn: 1 })
+    const lastWeekStart = startOfWeek(endDate, { weekStartsOn: 1 })
+
+    while (weekCursor <= lastWeekStart) {
+      const unitStart = startOfDay(weekCursor)
+      units.push({
+        start: unitStart,
+        end: addDays(unitStart, 6),
+        label: `${format(unitStart, 'd', { locale: ja })}〜`,
+        monthKey: toMonthKey(unitStart),
+      })
+      weekCursor = addDays(weekCursor, 7)
+    }
+  } else {
+    let dayCursor = startOfDay(startDate)
+    while (dayCursor <= endDate) {
+      const unitStart = startOfDay(dayCursor)
+      units.push({
+        start: unitStart,
+        end: unitStart,
+        label: `${unitStart.getDate()}`,
+        weekdayLabel: format(unitStart, 'EEE', { locale: ja }),
+        monthKey: toMonthKey(unitStart),
+      })
+      dayCursor = addDays(dayCursor, 1)
+    }
+  }
+
+  return units
 }
 
 export async function POST(
@@ -71,7 +118,13 @@ export async function POST(
   // 設定（ローカル日付で統一）
   const startDate = startOfDay(parseDateOnlyToLocal(project.startDate))
   const endDate = project.endDate ? startOfDay(parseDateOnlyToLocal(project.endDate)) : addDays(startDate, 6 * 30 - 1)
-  const totalDays = Math.max(1, Math.floor((endDate.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000)) + 1)
+  const isWeekly = project.timeScale === 'WEEK'
+  const timelineUnits = buildTimelineUnits(startDate, endDate, isWeekly)
+  const timelineColumnCount = timelineUnits.length
+  const timelineStart = timelineUnits[0]?.start ?? startDate
+  const timelineEnd = timelineUnits[timelineColumnCount - 1]?.end ?? endDate
+  const unitDurationMs = isWeekly ? 7 * MS_PER_DAY : MS_PER_DAY
+  const firstTimelineColumn = 4
 
   // タイトル・情報
   sheet.mergeCells('A1', 'E1')
@@ -87,64 +140,94 @@ export async function POST(
   sheet.getColumn(1).width = 28
   sheet.getColumn(2).width = 12  // 完了日列
   sheet.getColumn(3).width = 10  // 担当者列
-  for (let i = 0; i < totalDays; i += 1) {
-    const colIndex = 4 + i  // 日付列の開始位置を変更
-    sheet.getColumn(colIndex).width = 3
+  for (let i = 0; i < timelineColumnCount; i += 1) {
+    const colIndex = firstTimelineColumn + i
+    sheet.getColumn(colIndex).width = isWeekly ? 6 : 3
   }
 
-  // 月・日・曜日ヘッダー
-  // 月セルは結合、日セルと曜日セルは各日
-  // 月行: headerOffset, 日行: headerOffset+1, 曜日行: headerOffset+2
-  let cursor = 0
-  while (cursor < totalDays) {
-    const date = addDays(startDate, cursor)
-    const currentMonth = date.getMonth()
+  const headerRowCount = isWeekly ? 3 : 4
+  const yearRow = headerOffset
+  const monthRow = headerOffset + 1
+  const dayRow = headerOffset + 2
+  const weekdayRow = headerOffset + 3
+
+  // 年ヘッダー
+  let yearCursor = 0
+  while (yearCursor < timelineColumnCount) {
+    const unit = timelineUnits[yearCursor]
+    const targetYear = unit.start.getFullYear()
     let span = 0
     while (
-      cursor + span < totalDays &&
-      addDays(startDate, cursor + span).getMonth() === currentMonth
+      yearCursor + span < timelineColumnCount &&
+      timelineUnits[yearCursor + span].start.getFullYear() === targetYear
     ) {
       span += 1
     }
-    const from = 4 + cursor  // 日付列の開始位置を変更
+    const from = firstTimelineColumn + yearCursor
     const to = from + span - 1
-    const label = `${date.getMonth() + 1}月`
-    sheet.mergeCells(headerOffset, from, headerOffset, to)
-    sheet.getCell(headerOffset, from).value = label
-    sheet.getCell(headerOffset, from).alignment = { horizontal: 'center' }
+    sheet.mergeCells(yearRow, from, yearRow, to)
+    sheet.getCell(yearRow, from).value = `${targetYear}年`
+    sheet.getCell(yearRow, from).alignment = { horizontal: 'center' }
+    yearCursor += span
+  }
+
+  // 月ヘッダー
+  let cursor = 0
+  while (cursor < timelineColumnCount) {
+    const unit = timelineUnits[cursor]
+    const targetMonthKey = unit.monthKey
+    let span = 0
+    while (
+      cursor + span < timelineColumnCount &&
+      timelineUnits[cursor + span].monthKey === targetMonthKey
+    ) {
+      span += 1
+    }
+    const from = firstTimelineColumn + cursor
+    const to = from + span - 1
+    const label = `${unit.start.getMonth() + 1}月`
+    sheet.mergeCells(monthRow, from, monthRow, to)
+    sheet.getCell(monthRow, from).value = label
+    sheet.getCell(monthRow, from).alignment = { horizontal: 'center' }
     cursor += span
   }
 
-  // 日行
-  for (let i = 0; i < totalDays; i += 1) {
-    const d = addDays(startDate, i)
-    const col = 4 + i  // 日付列の開始位置を変更
-    sheet.getCell(headerOffset + 1, col).value = d.getDate()
-    sheet.getCell(headerOffset + 1, col).alignment = { horizontal: 'center' }
-  }
+  if (isWeekly) {
+    for (let i = 0; i < timelineColumnCount; i += 1) {
+      const col = firstTimelineColumn + i
+      sheet.getCell(dayRow, col).value = timelineUnits[i].label
+      sheet.getCell(dayRow, col).alignment = { horizontal: 'center', vertical: 'middle' }
+    }
+  } else {
+    // 日行
+    for (let i = 0; i < timelineColumnCount; i += 1) {
+      const col = firstTimelineColumn + i
+      sheet.getCell(dayRow, col).value = timelineUnits[i].label
+      sheet.getCell(dayRow, col).alignment = { horizontal: 'center' }
+    }
 
-  // 曜日行
-  for (let i = 0; i < totalDays; i += 1) {
-    const d = addDays(startDate, i)
-    const col = 4 + i  // 日付列の開始位置を変更
-    const dayOfWeekShort = format(d, 'EEE', { locale: ja })
-    sheet.getCell(headerOffset + 2, col).value = dayOfWeekShort
-    sheet.getCell(headerOffset + 2, col).alignment = { horizontal: 'center' }
-    
-    // 週末と祝日の背景色（優先順位: 祝日 > 週末）
-    const isWeekend = d.getDay() === 0 || d.getDay() === 6
-    const isHoliday = !!isJapaneseHoliday(d)
-    if (isHoliday) {
-      sheet.getCell(headerOffset + 2, col).fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: 'FCE7F3' }, // ピンク系の色（bg-pink-50相当）
-      }
-    } else if (isWeekend) {
-      sheet.getCell(headerOffset + 2, col).fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: 'EDEFF9' },
+    // 曜日行
+    for (let i = 0; i < timelineColumnCount; i += 1) {
+      const col = firstTimelineColumn + i
+      const date = timelineUnits[i].start
+      const dayOfWeekShort = timelineUnits[i].weekdayLabel ?? ''
+      sheet.getCell(weekdayRow, col).value = dayOfWeekShort
+      sheet.getCell(weekdayRow, col).alignment = { horizontal: 'center' }
+      
+      const isWeekend = date.getDay() === 0 || date.getDay() === 6
+      const isHoliday = !!isJapaneseHoliday(date)
+      if (isHoliday) {
+        sheet.getCell(weekdayRow, col).fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FCE7F3' },
+        }
+      } else if (isWeekend) {
+        sheet.getCell(weekdayRow, col).fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'EDEFF9' },
+        }
       }
     }
   }
@@ -153,21 +236,21 @@ export async function POST(
   sheet.getCell(headerOffset, 1).value = 'タスク名'
   sheet.getCell(headerOffset, 1).alignment = { horizontal: 'center', vertical: 'middle' }
   sheet.getCell(headerOffset, 1).font = { bold: true }
-  sheet.mergeCells(headerOffset, 1, headerOffset + 2, 1)  // 3行分を結合
+  sheet.mergeCells(headerOffset, 1, headerOffset + headerRowCount - 1, 1)
 
   sheet.getCell(headerOffset, 2).value = '完了日'
   sheet.getCell(headerOffset, 2).alignment = { horizontal: 'center', vertical: 'middle' }
   sheet.getCell(headerOffset, 2).font = { bold: true }
-  sheet.mergeCells(headerOffset, 2, headerOffset + 2, 2)  // 3行分を結合
+  sheet.mergeCells(headerOffset, 2, headerOffset + headerRowCount - 1, 2)
 
   sheet.getCell(headerOffset, 3).value = '担当者'
   sheet.getCell(headerOffset, 3).alignment = { horizontal: 'center', vertical: 'middle' }
   sheet.getCell(headerOffset, 3).font = { bold: true }
-  sheet.mergeCells(headerOffset, 3, headerOffset + 2, 3)  // 3行分を結合
+  sheet.mergeCells(headerOffset, 3, headerOffset + headerRowCount - 1, 3)
 
   // ボーダー（ヘッダー部）- 曜日行を含むように修正
-  for (let r = headerOffset; r <= headerOffset + 2; r += 1) {
-    for (let c = 1; c < 5 + totalDays; c += 1) {  // 列数を1つ増加
+  for (let r = headerOffset; r < headerOffset + headerRowCount; r += 1) {
+    for (let c = 1; c <= 3 + timelineColumnCount; c += 1) {
       const cell = sheet.getCell(r, c)
       // ヘッダー部分（月・日・曜日）は全て実線
       cell.border = {
@@ -182,7 +265,7 @@ export async function POST(
   // タスク行
   // 動的な色システムを使用（固定色から変更）
 
-  let rowIndex = headerOffset + 3  // 曜日行を追加したため+1
+  let rowIndex = headerOffset + headerRowCount
   for (const t of project.tasks) {
     const row = sheet.getRow(rowIndex)
     const isParentTask = !t.parentId
@@ -213,48 +296,58 @@ export async function POST(
     const endSource = !isParentTask ? t.plannedEnd ?? null : null
 
     // 日付が設定されている場合のみバーを描画
-    if (!isParentTask && startSource && endSource) {
-      const startOffset = Math.max(
-        0,
-        Math.floor((startOfDay(parseDateOnlyToLocal(startSource)).getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000))
-      )
-      const endOffset = Math.min(
-        totalDays - 1,
-        Math.floor((startOfDay(parseDateOnlyToLocal(endSource)).getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000))
-      )
-      const fromCol = 4 + startOffset  // 日付列の開始位置を変更
-      const toCol = 4 + endOffset
+    if (!isParentTask && startSource && endSource && timelineColumnCount > 0) {
+      const plannedStart = startOfDay(parseDateOnlyToLocal(startSource))
+      const plannedEnd = startOfDay(parseDateOnlyToLocal(endSource))
 
-      const color = getAssigneeColorWithSettings(t.assignee, !!t.completedAt, colorSettings)
-      const hex = color.hex
-      for (let c = fromCol; c <= toCol; c += 1) {
-        const cell = row.getCell(c)
-        // 列番号から日付を計算（列4が最初の日付列）
-        const dayIndex = c - 4
-        const date = addDays(startDate, dayIndex)
-        const isWeekend = date.getDay() === 0 || date.getDay() === 6
-        const isHoliday = !!isJapaneseHoliday(date)
-        
-        // 土日祝日にはタスクの色を塗らない
-        if (!isWeekend && !isHoliday) {
-          cell.fill = {
-            type: 'pattern',
-            pattern: 'solid',
-            fgColor: { argb: hex },
+      if (plannedEnd >= timelineStart && plannedStart <= timelineEnd) {
+        const startOffset = Math.max(
+          0,
+          Math.floor((plannedStart.getTime() - timelineStart.getTime()) / unitDurationMs)
+        )
+        const endOffset = Math.min(
+          timelineColumnCount - 1,
+          Math.floor((plannedEnd.getTime() - timelineStart.getTime()) / unitDurationMs)
+        )
+
+        const color = getAssigneeColorWithSettings(t.assignee, !!t.completedAt, colorSettings)
+        const hex = color.hex
+
+        for (let idx = startOffset; idx <= endOffset; idx += 1) {
+          const unit = timelineUnits[idx]
+
+          // 念のため実際の週/日の範囲と重なっているかを確認
+          if (plannedStart > unit.end || plannedEnd < unit.start) {
+            continue
           }
-        }
-        // タスクの枠線は点線で描画
-        cell.border = {
-          top: { style: 'dotted' },
-          left: { style: 'dotted' },
-          bottom: { style: 'dotted' },
-          right: { style: 'dotted' },
+
+          const col = firstTimelineColumn + idx
+          const cell = row.getCell(col)
+          const dateForBackground = unit.start
+          const isWeekend = dateForBackground.getDay() === 0 || dateForBackground.getDay() === 6
+          const isHoliday = !!isJapaneseHoliday(dateForBackground)
+          const canFill = isWeekly ? true : (!isWeekend && !isHoliday)
+
+          if (canFill) {
+            cell.fill = {
+              type: 'pattern',
+              pattern: 'solid',
+              fgColor: { argb: hex },
+            }
+          }
+
+          cell.border = {
+            top: { style: 'dotted' },
+            left: { style: 'dotted' },
+            bottom: { style: 'dotted' },
+            right: { style: 'dotted' },
+          }
         }
       }
     }
 
     // ガントチャートエリア全体に点線罫線を追加
-    for (let c = 4; c < 4 + totalDays; c += 1) {
+    for (let c = firstTimelineColumn; c < firstTimelineColumn + timelineColumnCount; c += 1) {
       const cell = row.getCell(c)
       if (!cell.border) {
         cell.border = {
@@ -266,28 +359,28 @@ export async function POST(
       }
     }
 
-    // 週末と祝日の薄い背景（タスクの色が塗られていないセルに適用）
-    for (let i = 0; i < totalDays; i += 1) {
-      const date = addDays(startDate, i)
-      const isWeekend = date.getDay() === 0 || date.getDay() === 6
-      const isHoliday = !!isJapaneseHoliday(date)
-      const col = 4 + i
-      const cell = row.getCell(col)
-      
-      // タスクの色が塗られていない場合のみ背景色を適用
-      if (!cell.fill) {
-        // 優先順位: 祝日 > 週末
-        if (isHoliday) {
-          cell.fill = {
-            type: 'pattern',
-            pattern: 'solid',
-            fgColor: { argb: 'FCE7F3' }, // ピンク系の色（bg-pink-50相当）
-          }
-        } else if (isWeekend) {
-          cell.fill = {
-            type: 'pattern',
-            pattern: 'solid',
-            fgColor: { argb: 'EDEFF9' },
+    if (!isWeekly) {
+      // 週末と祝日の薄い背景（タスクの色が塗られていないセルに適用）
+      for (let i = 0; i < timelineColumnCount; i += 1) {
+        const date = timelineUnits[i].start
+        const isWeekend = date.getDay() === 0 || date.getDay() === 6
+        const isHoliday = !!isJapaneseHoliday(date)
+        const col = firstTimelineColumn + i
+        const cell = row.getCell(col)
+        
+        if (!cell.fill) {
+          if (isHoliday) {
+            cell.fill = {
+              type: 'pattern',
+              pattern: 'solid',
+              fgColor: { argb: 'FCE7F3' },
+            }
+          } else if (isWeekend) {
+            cell.fill = {
+              type: 'pattern',
+              pattern: 'solid',
+              fgColor: { argb: 'EDEFF9' },
+            }
           }
         }
       }
@@ -309,7 +402,7 @@ export async function POST(
   // 印刷範囲の設定
   // A1からプロジェクト情報、ヘッダー、全タスク行までの範囲を印刷範囲に設定
   const lastRow = rowIndex - 1  // 最後のタスク行
-  const lastCol = 3 + totalDays  // 最後の日付列（A=1, B=2, C=3, D=4...）
+  const lastCol = 3 + timelineColumnCount  // 最後の日付列（A=1, B=2, C=3, D=4...）
   
   // 列番号をExcelの列文字に変換する関数
   const getColumnLetter = (colNum: number): string => {
