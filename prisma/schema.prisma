@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -12,70 +9,93 @@ datasource db {
 }
 
 model Project {
-  id        String   @id @default(cuid())
-  title     String
-  startDate DateTime
-  endDate   DateTime?
-  userId    String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Relations
-  tasks Task[]
-  assigneeColors AssigneeColor[]
-  assigneeOptions ProjectAssigneeOption[]
+  id                String                  @id @default(cuid())
+  title             String
+  startDate         DateTime
+  endDate           DateTime?
+  userId            String
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+  timeScale         TimeScale               @default(DAY)
+  assigneeColors    AssigneeColor[]
+  assigneeOptions   ProjectAssigneeOption[]
+  task_dependencies task_dependencies[]
+  tasks             Task[]
 
   @@map("projects")
 }
 
 model Task {
-  id           String    @id @default(cuid())
-  title        String
-  assignee     String
-  plannedStart DateTime
-  plannedEnd   DateTime
-  completedAt  DateTime?
-  order        Int       @default(0)
-  deleted      Boolean   @default(false)
-  projectId    String
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-
-  // Relations
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  id                                                       String              @id @default(cuid())
+  title                                                    String
+  assignee                                                 String
+  plannedStart                                             DateTime?
+  plannedEnd                                               DateTime?
+  completedAt                                              DateTime?
+  order                                                    Int                 @default(0)
+  deleted                                                  Boolean             @default(false)
+  projectId                                                String
+  parentId                                                 String?
+  createdAt                                                DateTime            @default(now())
+  updatedAt                                                DateTime            @updatedAt
+  task_dependencies_task_dependencies_predecessorIdTotasks task_dependencies[] @relation("task_dependencies_predecessorIdTotasks")
+  task_dependencies_task_dependencies_successorIdTotasks   task_dependencies[] @relation("task_dependencies_successorIdTotasks")
+  project                                                  Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parent                                                   Task?               @relation("TaskHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  subTasks                                                 Task[]              @relation("TaskHierarchy")
 
   @@map("tasks")
 }
 
 model AssigneeColor {
-  id        String   @id @default(cuid())
-  assignee  String
-  colorIndex Int     // 0-4のインデックス（COLOR_PALETTEの配列インデックス）
-  projectId String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id         String   @id @default(cuid())
+  assignee   String
+  colorIndex Int
+  projectId  String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
-  // Relations
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-
-  // 同じプロジェクト内で同じ担当者は一つの色設定のみ
   @@unique([projectId, assignee])
   @@map("assignee_colors")
 }
 
 model ProjectAssigneeOption {
   id        String   @id @default(cuid())
-  name      String   // 担当者名（例: "弊社", "デザイン部", "システム部"）
-  order     Int      // 表示順序（0-3）
+  name      String
+  order     Int
   projectId String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
-  // Relations
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-
-  // 同じプロジェクト内で同じ順序は一つのみ & 同じ名前は一つのみ
   @@unique([projectId, order])
   @@unique([projectId, name])
   @@map("project_assignee_options")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model task_dependencies {
+  id                                           String         @id
+  projectId                                    String
+  predecessorId                                String
+  successorId                                  String
+  type                                         DependencyType @default(FS)
+  createdAt                                    DateTime       @default(now())
+  updatedAt                                    DateTime
+  tasks_task_dependencies_predecessorIdTotasks Task           @relation("task_dependencies_predecessorIdTotasks", fields: [predecessorId], references: [id], onDelete: Cascade)
+  projects                                     Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tasks_task_dependencies_successorIdTotasks   Task           @relation("task_dependencies_successorIdTotasks", fields: [successorId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, predecessorId, successorId])
+  @@index([projectId])
+}
+
+enum DependencyType {
+  FS
+}
+
+enum TimeScale {
+  DAY
+  WEEK
 }

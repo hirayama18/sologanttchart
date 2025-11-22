@@ -392,6 +392,7 @@ export default function GanttPage() {
         }}
         projectId={projectId}
         task={editingTask}
+        tasks={tasks}
         optimizedCreateTask={createTask}
         optimizedEditTask={editTask}
       />

@@ -185,7 +185,20 @@ export async function POST(
   let rowIndex = headerOffset + 3  // 曜日行を追加したため+1
   for (const t of project.tasks) {
     const row = sheet.getRow(rowIndex)
+    const isParentTask = !t.parentId
     row.getCell(1).value = t.title
+    row.getCell(1).alignment = {
+      vertical: 'middle',
+      indent: isParentTask ? 0 : 2,
+    }
+    if (isParentTask) {
+      row.getCell(1).font = { bold: true }
+      row.getCell(1).fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFF9F3' },
+      }
+    }
     
     // 完了日の表示（ローカル日付）
     if (t.completedAt) {
@@ -196,41 +209,47 @@ export async function POST(
     
     row.getCell(3).value = t.assignee  // 担当者列を3列目に移動
 
-    const startOffset = Math.max(
-      0,
-      Math.floor((startOfDay(parseDateOnlyToLocal(t.plannedStart)).getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000))
-    )
-    const endOffset = Math.min(
-      totalDays - 1,
-      Math.floor((startOfDay(parseDateOnlyToLocal(t.plannedEnd)).getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000))
-    )
-    const fromCol = 4 + startOffset  // 日付列の開始位置を変更
-    const toCol = 4 + endOffset
+    const startSource = !isParentTask ? t.plannedStart ?? null : null
+    const endSource = !isParentTask ? t.plannedEnd ?? null : null
 
-    const color = getAssigneeColorWithSettings(t.assignee, !!t.completedAt, colorSettings)
-    const hex = color.hex
-    for (let c = fromCol; c <= toCol; c += 1) {
-      const cell = row.getCell(c)
-      // 列番号から日付を計算（列4が最初の日付列）
-      const dayIndex = c - 4
-      const date = addDays(startDate, dayIndex)
-      const isWeekend = date.getDay() === 0 || date.getDay() === 6
-      const isHoliday = !!isJapaneseHoliday(date)
-      
-      // 土日祝日にはタスクの色を塗らない
-      if (!isWeekend && !isHoliday) {
-        cell.fill = {
-          type: 'pattern',
-          pattern: 'solid',
-          fgColor: { argb: hex },
+    // 日付が設定されている場合のみバーを描画
+    if (!isParentTask && startSource && endSource) {
+      const startOffset = Math.max(
+        0,
+        Math.floor((startOfDay(parseDateOnlyToLocal(startSource)).getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000))
+      )
+      const endOffset = Math.min(
+        totalDays - 1,
+        Math.floor((startOfDay(parseDateOnlyToLocal(endSource)).getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000))
+      )
+      const fromCol = 4 + startOffset  // 日付列の開始位置を変更
+      const toCol = 4 + endOffset
+
+      const color = getAssigneeColorWithSettings(t.assignee, !!t.completedAt, colorSettings)
+      const hex = color.hex
+      for (let c = fromCol; c <= toCol; c += 1) {
+        const cell = row.getCell(c)
+        // 列番号から日付を計算（列4が最初の日付列）
+        const dayIndex = c - 4
+        const date = addDays(startDate, dayIndex)
+        const isWeekend = date.getDay() === 0 || date.getDay() === 6
+        const isHoliday = !!isJapaneseHoliday(date)
+        
+        // 土日祝日にはタスクの色を塗らない
+        if (!isWeekend && !isHoliday) {
+          cell.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: hex },
+          }
         }
-      }
-      // タスクの枠線は点線で描画
-      cell.border = {
-        top: { style: 'dotted' },
-        left: { style: 'dotted' },
-        bottom: { style: 'dotted' },
-        right: { style: 'dotted' },
+        // タスクの枠線は点線で描画
+        cell.border = {
+          top: { style: 'dotted' },
+          left: { style: 'dotted' },
+          bottom: { style: 'dotted' },
+          right: { style: 'dotted' },
+        }
       }
     }
 

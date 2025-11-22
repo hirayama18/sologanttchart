@@ -85,7 +85,8 @@ export function TaskList({ projectId, tasks, onTasksChange }: TaskListProps) {
     }
   }
 
-  const getDaysDuration = (start: string, end: string) => {
+  const getDaysDuration = (start: string | null, end: string | null) => {
+    if (!start || !end) return ''
     const startDate = new Date(start)
     const endDate = new Date(end)
     const diffTime = Math.abs(endDate.getTime() - startDate.getTime())
@@ -160,9 +161,11 @@ export function TaskList({ projectId, tasks, onTasksChange }: TaskListProps) {
                       {getDaysDuration(task.plannedStart, task.plannedEnd)}
                     </span>
                   </div>
-                  <div className="text-sm text-gray-600">
-                    {format(new Date(task.plannedStart), 'yyyy/MM/dd', { locale: ja })} 〜 {format(new Date(task.plannedEnd), 'yyyy/MM/dd', { locale: ja })}
-                  </div>
+                  {task.plannedStart && task.plannedEnd && (
+                    <div className="text-sm text-gray-600">
+                      {format(new Date(task.plannedStart), 'yyyy/MM/dd', { locale: ja })} 〜 {format(new Date(task.plannedEnd), 'yyyy/MM/dd', { locale: ja })}
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>

@@ -61,6 +61,9 @@ interface TaskBarProps {
 const TaskBar = memo(({ task, visibleDates, dragState, DAY_WIDTH_PX, onMouseDown, onEditTask, getAssigneeColor }: TaskBarProps) => {
   // タスクバーのスタイル計算をメモ化
   const taskBarStyle = useMemo(() => {
+    // 中項目（親タスク）または日付が設定されていない場合は表示しない
+    if (!task.parentId || !task.plannedStart || !task.plannedEnd) return null
+
     const visibleStart = visibleDates[0]
     const visibleEnd = visibleDates[visibleDates.length - 1]
 
@@ -327,7 +330,7 @@ export function GanttChart({ project, tasks, onTasksChange, onEditTask, onTaskUp
     document.body.style.userSelect = 'none'
     
     const task = tasks.find(t => t.id === taskId)
-    if (!task) return
+    if (!task || !task.plannedStart || !task.plannedEnd) return
     
     setDragState({
       taskId,
@@ -473,6 +476,41 @@ export function GanttChart({ project, tasks, onTasksChange, onEditTask, onTaskUp
   const today = startOfDay(new Date())
   const todayOffset = differenceInCalendarDays(today, visibleDates[0])
 
+  // タスクを階層構造（ツリー順）にソート
+  const sortedTasks = useMemo(() => {
+    if (!tasks) return []
+
+    // 親タスクと子タスクに分類
+    const rootTasks = tasks.filter(t => !t.parentId).sort((a, b) => a.order - b.order)
+    const subTasksMap = new Map<string, TaskResponse[]>()
+    
+    tasks.forEach(t => {
+      if (t.parentId) {
+        const subs = subTasksMap.get(t.parentId) || []
+        subs.push(t)
+        subTasksMap.set(t.parentId, subs)
+      }
+    })
+
+    // ツリー順にフラット化
+    const result: TaskResponse[] = []
+    rootTasks.forEach(root => {
+      result.push(root)
+      const subs = subTasksMap.get(root.id)
+      if (subs) {
+        // サブタスクもorder順にソート
+        subs.sort((a, b) => a.order - b.order).forEach(sub => result.push(sub))
+      }
+    })
+    
+    // 念のため、孤児タスク（親が見つからない子タスク）があれば末尾に追加
+    const processedIds = new Set(result.map(t => t.id))
+    const orphans = tasks.filter(t => !processedIds.has(t.id)).sort((a, b) => a.order - b.order)
+    result.push(...orphans)
+
+    return result
+  }, [tasks])
+
   return (
     <div className="bg-white border rounded-lg overflow-hidden">
       {/* 色凡例 */}
@@ -511,7 +549,7 @@ export function GanttChart({ project, tasks, onTasksChange, onEditTask, onTaskUp
           </div>
           
           {/* タスク項目（各行の高さをガント行と厳密に一致させる） */}
-          {tasks.map((task) => (
+          {sortedTasks.map((task) => (
             <div
               key={task.id}
               className={`relative h-12 border-b bg-white flex items-center px-4 ${dragTaskId === task.id ? 'opacity-60' : ''} ${dropTargetId === task.id ? 'bg-blue-50/30' : ''}`}
@@ -523,6 +561,35 @@ export function GanttChart({ project, tasks, onTasksChange, onEditTask, onTaskUp
               }}
               onDragOver={(e) => {
                 e.preventDefault()
+                
+                const srcId = dragTaskId
+                const dstId = task.id
+                if (!srcId || srcId === dstId) {
+                  e.dataTransfer.dropEffect = 'none'
+                  return
+                }
+
+                const srcTask = tasks.find(t => t.id === srcId)
+                const dstTask = tasks.find(t => t.id === dstId)
+
+                if (!srcTask || !dstTask) {
+                  e.dataTransfer.dropEffect = 'none'
+                  return
+                }
+
+                // 親またぎ禁止：parentIdが異なる場合はドロップ不可
+                // 中項目同士(parentId=null)はOK
+                // nullとundefinedを正規化して比較
+                const srcParentId = srcTask.parentId || null
+                const dstParentId = dstTask.parentId || null
+                
+                if (srcParentId !== dstParentId) {
+                   e.dataTransfer.dropEffect = 'none'
+                   setDropTargetId(null)
+                   setDropPosition(null)
+                   return
+                }
+
                 e.dataTransfer.dropEffect = 'move'
                 const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect()
                 const offset = e.clientY - rect.top
@@ -535,16 +602,77 @@ export function GanttChart({ project, tasks, onTasksChange, onEditTask, onTaskUp
                 const srcId = e.dataTransfer.getData('text/plain')
                 const dstId = task.id
                 if (!srcId || srcId === dstId) return
-                const current = tasks.map((t) => t.id)
-                const from = current.indexOf(srcId)
-                const to = current.indexOf(dstId)
-                if (from === -1 || to === -1) return
-                // 作業用配列から移動元を除去
-                const next = current.filter((id) => id !== srcId)
-                let insertIndex = next.indexOf(dstId)
-                if (dropPosition === 'after') insertIndex += 1
-                next.splice(insertIndex, 0, srcId)
-                handleReorder(next)
+                
+                // tasks から再取得して検証
+                const srcTask = tasks.find(t => t.id === srcId)
+                const dstTask = tasks.find(t => t.id === dstId)
+                
+                const srcParentId = srcTask?.parentId || null
+                const dstParentId = dstTask?.parentId || null
+
+                if (!srcTask || !dstTask || srcParentId !== dstParentId) return
+                
+                console.log('Dragging:', {
+                  srcId, dstId, srcParentId, dstParentId, dropPosition
+                })
+                
+                // sortedTasks（表示順）をベースに並び替えを行う
+                const currentIds = sortedTasks.map((t) => t.id)
+                const fromIndex = currentIds.indexOf(srcId)
+                const toIndex = currentIds.indexOf(dstId)
+                
+                if (fromIndex === -1 || toIndex === -1) return
+                
+                // 新しいIDリストを作成
+                const newIds = [...currentIds]
+                
+                // 中項目（parentIdなし）の場合、子タスクも含めて移動させる
+                if (!srcTask.parentId) {
+                    // 子タスクのIDセットを取得
+                    const childIds = tasks.filter(t => t.parentId === srcId).map(t => t.id)
+                    
+                    // 移動対象のインデックスを収集（srcTask + その子タスク）
+                    const movingIndices = [fromIndex]
+                    childIds.forEach(cid => {
+                        const idx = currentIds.indexOf(cid)
+                        if (idx !== -1) movingIndices.push(idx)
+                    })
+                    movingIndices.sort((a, b) => a - b) // 昇順ソート
+                    
+                    // 移動対象を抽出
+                    const movingIds = movingIndices.map(idx => currentIds[idx])
+                    
+                    // 配列から削除（後ろから削除しないとインデックスがずれる）
+                    for (let i = movingIndices.length - 1; i >= 0; i--) {
+                        newIds.splice(movingIndices[i], 1)
+                    }
+                    
+                    // 挿入位置の再計算
+                    let insertBaseIndex = newIds.indexOf(dstId)
+                    
+                    if (dropPosition === 'after') {
+                        // dstTaskの後ろに挿入するが、dstTaskの子タスクがあればその分スキップ
+                        const dstChildrenIds = tasks.filter(t => t.parentId === dstId).map(t => t.id)
+                        insertBaseIndex += 1 // dstIdの次
+                        
+                        // dstChildrenIds の分だけ進める
+                        while (insertBaseIndex < newIds.length && dstChildrenIds.includes(newIds[insertBaseIndex])) {
+                            insertBaseIndex++
+                        }
+                    }
+                    
+                    // 挿入
+                    newIds.splice(insertBaseIndex, 0, ...movingIds)
+                    
+                } else {
+                    // 小項目の場合：単体移動
+                    newIds.splice(fromIndex, 1)
+                    let insertIndex = newIds.indexOf(dstId)
+                    if (dropPosition === 'after') insertIndex += 1
+                    newIds.splice(insertIndex, 0, srcId)
+                }
+
+                handleReorder(newIds)
                 setDragTaskId(null)
                 setDropTargetId(null)
                 setDropPosition(null)
@@ -570,9 +698,9 @@ export function GanttChart({ project, tasks, onTasksChange, onEditTask, onTaskUp
               {dropTargetId === task.id && dropPosition === 'after' && (
                 <div className="absolute left-0 right-0 bottom-0 h-0.5 bg-blue-500" />
               )}
-                <div className="w-full flex items-center justify-between gap-2">
+                <div className={`w-full flex items-center justify-between gap-2 ${task.parentId ? 'pl-6 border-l-2 border-gray-200 ml-2' : ''}`}>
                   <div className="min-w-0">
-                    <div className={`font-medium text-sm leading-none truncate ${task.completedAt ? 'line-through text-gray-500' : ''}`}>
+                    <div className={`font-medium text-sm leading-none truncate ${task.completedAt ? 'line-through text-gray-500' : ''} ${!task.parentId ? 'font-bold text-gray-800' : 'text-gray-600'}`}>
                       {task.title}
                       {task.completedAt && <span className="ml-2 text-xs text-green-600">✓ 完了</span>}
                     </div>
@@ -745,7 +873,7 @@ export function GanttChart({ project, tasks, onTasksChange, onEditTask, onTaskUp
               />
             )}
             
-            {tasks.map((task) => (
+            {sortedTasks.map((task) => (
               <div key={task.id} className="h-12 border-b relative">
                 <TaskBar
                   task={task}

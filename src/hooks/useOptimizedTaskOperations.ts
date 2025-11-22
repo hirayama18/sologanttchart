@@ -30,6 +30,17 @@ export function useOptimizedTaskOperations({
 
   // 新規タスク作成（楽観的UI更新）
   const createTask = useCallback(async (taskData: CreateTaskRequest): Promise<TaskResponse | null> => {
+    const toIsoOrNull = (value?: string | null): string | null => {
+      if (!value) return null
+      try {
+        const dateString = value.includes('T') ? value : `${value}T00:00:00.000Z`
+        const parsed = new Date(dateString)
+        return isNaN(parsed.getTime()) ? null : parsed.toISOString()
+      } catch {
+        return null
+      }
+    }
+
     // 1. 仮のタスクIDを生成
     const tempId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
     
@@ -39,9 +50,9 @@ export function useOptimizedTaskOperations({
       id: tempId,
       title: taskData.title,
       assignee: taskData.assignee,
-      plannedStart: new Date(taskData.plannedStart + 'T00:00:00.000Z').toISOString(),
-      plannedEnd: new Date(taskData.plannedEnd + 'T00:00:00.000Z').toISOString(),
-      completedAt: taskData.completedAt ? new Date(taskData.completedAt + 'T00:00:00.000Z').toISOString() : null,
+      plannedStart: toIsoOrNull(taskData.plannedStart),
+      plannedEnd: toIsoOrNull(taskData.plannedEnd),
+      completedAt: toIsoOrNull(taskData.completedAt),
       order: 999999, // 仮の値（APIで正しい値が設定される）
       deleted: false,
       projectId: taskData.projectId,

@@ -27,13 +27,28 @@ export async function POST(request: NextRequest) {
         { status: 403 }
       )
     }
+
+    console.log('Create Task Request Body:', JSON.stringify(body))
+    
+    const parseDate = (val: string | null | undefined): Date | null => {
+      if (!val) return null;
+      try {
+        const strVal = String(val);
+        const dateStr = strVal.includes('T') ? strVal : `${strVal}T00:00:00`;
+        const d = new Date(dateStr);
+        return isNaN(d.getTime()) ? null : d;
+      } catch {
+        return null;
+      }
+    }
     
     const taskData = {
       title: body.title,
       assignee: body.assignee,
-      plannedStart: new Date(body.plannedStart + (body.plannedStart.includes('T') ? '' : 'T00:00:00')),
-      plannedEnd: new Date(body.plannedEnd + (body.plannedEnd.includes('T') ? '' : 'T00:00:00')),
+      plannedStart: parseDate(body.plannedStart),
+      plannedEnd: parseDate(body.plannedEnd),
       projectId: body.projectId,
+      parentId: body.parentId || null,
       // orderはDALで自動計算されるため、明示的に指定しない
       // これにより新規タスクは必ず一番下に配置される
     }
@@ -63,11 +78,12 @@ export async function POST(request: NextRequest) {
       id: task.id,
       title: task.title,
       assignee: task.assignee,
-      plannedStart: task.plannedStart.toISOString(),
-      plannedEnd: task.plannedEnd.toISOString(),
+      plannedStart: task.plannedStart ? task.plannedStart.toISOString() : null,
+      plannedEnd: task.plannedEnd ? task.plannedEnd.toISOString() : null,
       order: task.order,
       deleted: task.deleted,
       projectId: task.projectId,
+      parentId: task.parentId,
       createdAt: task.createdAt.toISOString(),
       updatedAt: task.updatedAt.toISOString(),
       completedAt: completedAtValue

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -19,13 +19,14 @@ interface TaskFormProps {
   onTaskCreated: (task: TaskResponse) => void
   projectId: string
   task?: TaskResponse // 編集モード用
+  tasks?: TaskResponse[] // 親タスク選択用
   // 最適化された操作関数（楽観的UI更新対応）
   optimizedCreateTask?: (taskData: CreateTaskRequest) => Promise<TaskResponse | null>
   optimizedEditTask?: (taskId: string, uiUpdates: Partial<TaskResponse>, originalData?: Partial<TaskResponse>, apiUpdates?: Partial<CreateTaskRequest>) => void
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-export function TaskForm({ open, onOpenChange, onTaskCreated, projectId, task, optimizedCreateTask, optimizedEditTask: _ }: TaskFormProps) {
+export function TaskForm({ open, onOpenChange, onTaskCreated, projectId, task, tasks, optimizedCreateTask, optimizedEditTask: _ }: TaskFormProps) {
   const [loading, setLoading] = useState(false)
   const [assigneeOptions, setAssigneeOptions] = useState<AssigneeOption[]>([])
   const [formData, setFormData] = useState({
@@ -33,10 +34,20 @@ export function TaskForm({ open, onOpenChange, onTaskCreated, projectId, task, o
     assignee: '',
     plannedStart: new Date().toISOString().split('T')[0],
     plannedEnd: new Date().toISOString().split('T')[0],
-    completedAt: ''  // 空文字列は未完了を表す
+    completedAt: '',  // 空文字列は未完了を表す
+    parentId: 'none'  // 'none'は親なし（中項目）
   })
 
   const isEditMode = !!task
+  const isParentTask = formData.parentId === 'none'
+
+  // 親タスク候補の計算
+  const parentOptions = useMemo(() => {
+    if (!tasks) return []
+    // 編集時は自分自身を親にできない。
+    // また、簡易的に「現在親を持っていないタスク（ルートタスク）」のみを親候補とする（2階層制限）。
+    return tasks.filter(t => !t.parentId && t.id !== task?.id)
+  }, [tasks, task])
 
   // 担当者選択肢を読み込み
   useEffect(() => {
@@ -69,9 +80,10 @@ export function TaskForm({ open, onOpenChange, onTaskCreated, projectId, task, o
       setFormData({
         title: task.title,
         assignee: task.assignee,
-        plannedStart: task.plannedStart.slice(0, 10),
-        plannedEnd: task.plannedEnd.slice(0, 10),
-        completedAt: task.completedAt ? task.completedAt.slice(0, 10) : ''
+        plannedStart: task.plannedStart ? task.plannedStart.slice(0, 10) : new Date().toISOString().split('T')[0],
+        plannedEnd: task.plannedEnd ? task.plannedEnd.slice(0, 10) : new Date().toISOString().split('T')[0],
+        completedAt: task.completedAt ? task.completedAt.slice(0, 10) : '',
+        parentId: task.parentId || 'none'
       })
     } else {
       // 新規作成モード: 初期値を設定
@@ -81,10 +93,11 @@ export function TaskForm({ open, onOpenChange, onTaskCreated, projectId, task, o
         assignee: defaultAssignee,
         plannedStart: new Date().toISOString().split('T')[0],
         plannedEnd: new Date().toISOString().split('T')[0],
-        completedAt: ''
+        completedAt: '',
+        parentId: 'none'
       })
     }
-  }, [task])
+  }, [task, assigneeOptions]) // assigneeOptions依存を追加（初期値設定のため）
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -100,11 +113,12 @@ export function TaskForm({ open, onOpenChange, onTaskCreated, projectId, task, o
         const requestData: CreateTaskRequest = {
           title: formData.title,
           assignee: formData.assignee,
-          plannedStart: formData.plannedStart,  // YYYY-MM-DD形式で送信
-          plannedEnd: formData.plannedEnd,      // YYYY-MM-DD形式で送信
+          plannedStart: isParentTask ? null : formData.plannedStart,  // YYYY-MM-DD形式で送信
+          plannedEnd: isParentTask ? null : formData.plannedEnd,      // YYYY-MM-DD形式で送信
           projectId,
           // orderは送信しない（DALで自動計算される）
-          completedAt: formData.completedAt || null
+          completedAt: formData.completedAt || null,
+          parentId: isParentTask ? null : formData.parentId
         }
 
         // 楽観的UI更新（即座に仮タスクが返される）
@@ -122,7 +136,8 @@ export function TaskForm({ open, onOpenChange, onTaskCreated, projectId, task, o
             assignee: defaultAssignee,
             plannedStart: new Date().toISOString().split('T')[0],
             plannedEnd: new Date().toISOString().split('T')[0],
-            completedAt: ''
+            completedAt: '',
+            parentId: 'none'
           })
         }
         
@@ -131,14 +146,15 @@ export function TaskForm({ open, onOpenChange, onTaskCreated, projectId, task, o
         const url = isEditMode && task ? `/api/tasks/${task.id}` : '/api/tasks'
         const method = isEditMode ? 'PATCH' : 'POST'
         
-        const requestData: CreateTaskRequest = {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const requestData: any = { // 型定義の厳密なチェックを回避（CreateとUpdateで異なるため）
           title: formData.title,
           assignee: formData.assignee,
-          plannedStart: formData.plannedStart,
-          plannedEnd: formData.plannedEnd,
+          plannedStart: isParentTask ? null : formData.plannedStart,
+          plannedEnd: isParentTask ? null : formData.plannedEnd,
           projectId,
-          // orderは送信しない（DALで自動計算される）
-          completedAt: formData.completedAt || null
+          completedAt: formData.completedAt || null,
+          parentId: isParentTask ? null : formData.parentId
         }
 
         const response = await fetch(url, {
@@ -152,23 +168,26 @@ export function TaskForm({ open, onOpenChange, onTaskCreated, projectId, task, o
           onTaskCreated(taskResponse)
           onOpenChange(false)
           
-          if (!isEditMode) {
+            if (!isEditMode) {
             const defaultAssignee = assigneeOptions.length > 0 ? assigneeOptions[0].name : ''
             setFormData({
               title: '',
               assignee: defaultAssignee,
               plannedStart: new Date().toISOString().split('T')[0],
               plannedEnd: new Date().toISOString().split('T')[0],
-              completedAt: ''
+              completedAt: '',
+              parentId: 'none'
             })
           }
         } else {
-          throw new Error('API request failed')
+          const errorData = await response.json().catch(() => null)
+          const errorMessage = errorData?.message || errorData?.error || response.statusText || 'API request failed'
+          throw new Error(errorMessage)
         }
       }
     } catch (error) {
       console.error('Error saving task:', error)
-      alert('タスクの保存中にエラーが発生しました。')
+      alert(`タスクの保存中にエラーが発生しました。\n詳細: ${(error as Error).message}`)
     } finally {
       setLoading(false)
     }
@@ -182,9 +201,11 @@ export function TaskForm({ open, onOpenChange, onTaskCreated, projectId, task, o
   }
 
   const isFormValid = formData.title.trim() !== '' && 
-                     formData.plannedStart !== '' && 
-                     formData.plannedEnd !== '' &&
-                     new Date(formData.plannedStart) <= new Date(formData.plannedEnd)
+                     (isParentTask || (
+                       formData.plannedStart !== '' && 
+                       formData.plannedEnd !== '' &&
+                       new Date(formData.plannedStart) <= new Date(formData.plannedEnd)
+                     ))
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -230,32 +251,55 @@ export function TaskForm({ open, onOpenChange, onTaskCreated, projectId, task, o
             </div>
             
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="plannedStart" className="text-right">
-                開始日
+              <Label htmlFor="parentId" className="text-right">
+                親タスク
               </Label>
-              <Input
-                id="plannedStart"
-                type="date"
-                value={formData.plannedStart}
-                onChange={(e) => handleInputChange('plannedStart', e.target.value)}
-                className="col-span-3"
-                required
-              />
+              <Select value={formData.parentId} onValueChange={(value) => handleInputChange('parentId', value)}>
+                <SelectTrigger className="col-span-3">
+                  <SelectValue placeholder="親タスクを選択" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">なし（中項目として作成）</SelectItem>
+                  {parentOptions.map((option) => (
+                    <SelectItem key={option.id} value={option.id}>
+                      {option.title}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="plannedEnd" className="text-right">
-                終了日
-              </Label>
-              <Input
-                id="plannedEnd"
-                type="date"
-                value={formData.plannedEnd}
-                onChange={(e) => handleInputChange('plannedEnd', e.target.value)}
-                className="col-span-3"
-                required
-              />
-            </div>
+            {!isParentTask && (
+              <>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="plannedStart" className="text-right">
+                    開始日
+                  </Label>
+                  <Input
+                    id="plannedStart"
+                    type="date"
+                    value={formData.plannedStart}
+                    onChange={(e) => handleInputChange('plannedStart', e.target.value)}
+                    className="col-span-3"
+                    required={!isParentTask}
+                  />
+                </div>
+                
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="plannedEnd" className="text-right">
+                    終了日
+                  </Label>
+                  <Input
+                    id="plannedEnd"
+                    type="date"
+                    value={formData.plannedEnd}
+                    onChange={(e) => handleInputChange('plannedEnd', e.target.value)}
+                    className="col-span-3"
+                    required={!isParentTask}
+                  />
+                </div>
+              </>
+            )}
             
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="completedAt" className="text-right">

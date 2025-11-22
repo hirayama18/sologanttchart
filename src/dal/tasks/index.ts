@@ -135,6 +135,7 @@ export class TaskDAL {
         plannedStart: originalTask.plannedStart,
         plannedEnd: originalTask.plannedEnd,
         projectId: originalTask.projectId,
+        parentId: originalTask.parentId,
         order: newOrder
       }
     })

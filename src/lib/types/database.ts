@@ -25,9 +25,10 @@ export type UpdateProjectData = Partial<Omit<CreateProjectData, 'userId'>>
 export type CreateTaskData = {
   title: string
   assignee: string
-  plannedStart: Date
-  plannedEnd: Date
+  plannedStart?: Date | null
+  plannedEnd?: Date | null
   projectId: string
+  parentId?: string | null
   order?: number
   completedAt?: Date | null
 }

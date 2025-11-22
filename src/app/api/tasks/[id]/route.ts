@@ -43,11 +43,12 @@ export async function GET(
       id: task.id,
       title: task.title,
       assignee: task.assignee,
-      plannedStart: task.plannedStart.toISOString(),
-      plannedEnd: task.plannedEnd.toISOString(),
+      plannedStart: task.plannedStart ? task.plannedStart.toISOString() : null,
+      plannedEnd: task.plannedEnd ? task.plannedEnd.toISOString() : null,
       order: task.order,
       deleted: task.deleted,
       projectId: task.projectId,
+      parentId: task.parentId,
       createdAt: task.createdAt.toISOString(),
       updatedAt: task.updatedAt.toISOString(),
       completedAt: task.completedAt ? task.completedAt.toISOString() : null
@@ -92,39 +93,49 @@ export async function PATCH(
     const updateData: Partial<{
       title: string;
       assignee: string;
-      plannedStart: Date;
-      plannedEnd: Date;
+      plannedStart: Date | null;
+      plannedEnd: Date | null;
       order: number;
+      parentId: string | null;
     }> = {}
     
     if (body.title) updateData.title = body.title
     if (body.assignee) updateData.assignee = body.assignee
-    if (body.plannedStart) {
-      // ISO形式を最優先、YYYY-MM-DDでも受けつける
-      const raw = body.plannedStart
-      const startDate = typeof raw === 'string' && raw.includes('T')
-        ? new Date(raw)
-        : new Date(raw as string + 'T00:00:00') // ローカル深夜
-      if (isNaN(startDate.getTime())) {
-        return NextResponse.json(
-          { error: 'Invalid plannedStart date format', received: body.plannedStart },
-          { status: 400 }
-        )
+    if (body.parentId !== undefined) updateData.parentId = body.parentId
+    if (body.plannedStart !== undefined) {
+      if (body.plannedStart === null) {
+        updateData.plannedStart = null
+      } else {
+        // ISO形式を最優先、YYYY-MM-DDでも受けつける
+        const raw = body.plannedStart
+        const startDate = typeof raw === 'string' && raw.includes('T')
+          ? new Date(raw)
+          : new Date(raw as string + 'T00:00:00') // ローカル深夜
+        if (isNaN(startDate.getTime())) {
+          return NextResponse.json(
+            { error: 'Invalid plannedStart date format', received: body.plannedStart },
+            { status: 400 }
+          )
+        }
+        updateData.plannedStart = startDate
       }
-      updateData.plannedStart = startDate
     }
-    if (body.plannedEnd) {
-      const raw = body.plannedEnd
-      const endDate = typeof raw === 'string' && raw.includes('T')
-        ? new Date(raw)
-        : new Date(raw as string + 'T00:00:00') // ローカル深夜
-      if (isNaN(endDate.getTime())) {
-        return NextResponse.json(
-          { error: 'Invalid plannedEnd date format', received: body.plannedEnd },
-          { status: 400 }
-        )
+    if (body.plannedEnd !== undefined) {
+      if (body.plannedEnd === null) {
+        updateData.plannedEnd = null
+      } else {
+        const raw = body.plannedEnd
+        const endDate = typeof raw === 'string' && raw.includes('T')
+          ? new Date(raw)
+          : new Date(raw as string + 'T00:00:00') // ローカル深夜
+        if (isNaN(endDate.getTime())) {
+          return NextResponse.json(
+            { error: 'Invalid plannedEnd date format', received: body.plannedEnd },
+            { status: 400 }
+          )
+        }
+        updateData.plannedEnd = endDate
       }
-      updateData.plannedEnd = endDate
     }
     if (body.order !== undefined) updateData.order = body.order
 
@@ -174,11 +185,12 @@ export async function PATCH(
       id: task.id,
       title: task.title,
       assignee: task.assignee,
-      plannedStart: new Date(task.plannedStart.getFullYear(), task.plannedStart.getMonth(), task.plannedStart.getDate()).toISOString(),
-      plannedEnd: new Date(task.plannedEnd.getFullYear(), task.plannedEnd.getMonth(), task.plannedEnd.getDate()).toISOString(),
+      plannedStart: task.plannedStart ? new Date(task.plannedStart.getFullYear(), task.plannedStart.getMonth(), task.plannedStart.getDate()).toISOString() : null,
+      plannedEnd: task.plannedEnd ? new Date(task.plannedEnd.getFullYear(), task.plannedEnd.getMonth(), task.plannedEnd.getDate()).toISOString() : null,
       order: task.order,
       deleted: task.deleted,
       projectId: task.projectId,
+      parentId: task.parentId,
       createdAt: task.createdAt.toISOString(),
       updatedAt: task.updatedAt.toISOString(),
       completedAt: finalCompletedAt

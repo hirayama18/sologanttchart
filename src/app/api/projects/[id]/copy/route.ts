@@ -51,11 +51,12 @@ export async function POST(
         id: task.id,
         title: task.title,
         assignee: task.assignee,
-        plannedStart: task.plannedStart.toISOString(),
-        plannedEnd: task.plannedEnd.toISOString(),
+        plannedStart: task.plannedStart ? task.plannedStart.toISOString() : null,
+        plannedEnd: task.plannedEnd ? task.plannedEnd.toISOString() : null,
         order: task.order,
         deleted: task.deleted,
         projectId: task.projectId,
+        parentId: task.parentId,
         createdAt: task.createdAt.toISOString(),
         updatedAt: task.updatedAt.toISOString()
       } as TaskResponse))
