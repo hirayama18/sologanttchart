@@ -14,5 +14,6 @@ export function cn(...inputs: ClassValue[]) {
  */
 export function isJapaneseHoliday(date: Date): string | null {
   const dateStr = format(date, "yyyy-MM-dd")
-  return holidays[dateStr] || null
+  const holiday = (holidays as Record<string, { name: string }>)[dateStr]
+  return holiday?.name || null
 }
