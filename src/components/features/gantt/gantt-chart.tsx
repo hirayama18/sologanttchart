@@ -7,6 +7,7 @@ import { format, addDays, startOfDay, differenceInCalendarDays, isWeekend } from
 import { ja } from 'date-fns/locale'
 import { useOptimizedTaskUpdate } from '@/hooks/useOptimizedTaskUpdate'
 import { getAssigneeColorWithSettings } from '@/lib/colors'
+import { isJapaneseHoliday } from '@/lib/utils'
 import { ColorLegend } from './color-legend'
 
 // ローカル日付(年-月-日)として扱うためのユーティリティ
@@ -674,19 +675,33 @@ export function GanttChart({ project, tasks, onTasksChange, onEditTask, onTaskUp
               className="h-10 grid"
               style={{ gridTemplateColumns: `repeat(${visibleDates.length}, ${DAY_WIDTH_PX}px)` }}
             >
-              {visibleDates.map((date, index) => (
-                <div
-                  key={index}
-                  className={`border-r text-center text-xs p-1 flex flex-col items-center justify-center leading-tight ${
-                    isWeekend(date) ? 'bg-blue-50' : ''
-                  } ${
-                    format(date, 'yyyy-MM-dd') === format(today, 'yyyy-MM-dd') ? 'bg-yellow-100' : ''
-                  }`}
-                >
-                  <div className="text-sm font-semibold">{format(date, 'd', { locale: ja })}</div>
-                  <div className="text-[10px] text-gray-500">{format(date, 'EEE', { locale: ja })}</div>
-                </div>
-              ))}
+              {visibleDates.map((date, index) => {
+                const isToday = format(date, 'yyyy-MM-dd') === format(today, 'yyyy-MM-dd')
+                const holidayName = isJapaneseHoliday(date)
+                const isHoliday = !!holidayName
+                const isWeekendDay = isWeekend(date)
+                
+                // 背景色の優先順位: 今日 > 祝日 > 週末
+                let bgClass = ''
+                if (isToday) {
+                  bgClass = 'bg-yellow-100'
+                } else if (isHoliday) {
+                  bgClass = 'bg-pink-50'
+                } else if (isWeekendDay) {
+                  bgClass = 'bg-blue-50'
+                }
+                
+                return (
+                  <div
+                    key={index}
+                    className={`border-r text-center text-xs p-1 flex flex-col items-center justify-center leading-tight ${bgClass}`}
+                    title={holidayName ? holidayName : undefined}
+                  >
+                    <div className="text-sm font-semibold">{format(date, 'd', { locale: ja })}</div>
+                    <div className="text-[10px] text-gray-500">{format(date, 'EEE', { locale: ja })}</div>
+                  </div>
+                )
+              })}
             </div>
           </div>
 
@@ -698,12 +713,29 @@ export function GanttChart({ project, tasks, onTasksChange, onEditTask, onTaskUp
               className="absolute inset-0 grid pointer-events-none z-0"
               style={{ gridTemplateColumns: `repeat(${visibleDates.length}, ${DAY_WIDTH_PX}px)` }}
             >
-              {visibleDates.map((date, index) => (
-                <div
-                  key={index}
-                  className={`border-r ${isWeekend(date) ? 'bg-blue-50/50' : ''}`}
-                />
-              ))}
+              {visibleDates.map((date, index) => {
+                const isToday = format(date, 'yyyy-MM-dd') === format(today, 'yyyy-MM-dd')
+                const holidayName = isJapaneseHoliday(date)
+                const isHoliday = !!holidayName
+                const isWeekendDay = isWeekend(date)
+                
+                // 背景色の優先順位: 今日 > 祝日 > 週末
+                let bgClass = ''
+                if (isToday) {
+                  bgClass = 'bg-yellow-100/30'
+                } else if (isHoliday) {
+                  bgClass = 'bg-pink-50/50'
+                } else if (isWeekendDay) {
+                  bgClass = 'bg-blue-50/50'
+                }
+                
+                return (
+                  <div
+                    key={index}
+                    className={`border-r ${bgClass}`}
+                  />
+                )
+              })}
             </div>
             {/* 今日のライン */}
             {todayOffset >= 0 && todayOffset < visibleDates.length && (

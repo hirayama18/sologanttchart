@@ -5,6 +5,7 @@ import ExcelJS from 'exceljs'
 import { getAuthenticatedUserId, isAuthError } from '@/lib/auth'
 import { getAssigneeColorWithSettings } from '@/lib/colors'
 import { AssigneeColorDAL } from '@/dal/assignee-colors'
+import { isJapaneseHoliday } from '@/lib/utils'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -130,9 +131,16 @@ export async function POST(
     sheet.getCell(headerOffset + 2, col).value = dayOfWeekShort
     sheet.getCell(headerOffset + 2, col).alignment = { horizontal: 'center' }
     
-    // 週末の背景色
+    // 週末と祝日の背景色（優先順位: 祝日 > 週末）
     const isWeekend = d.getDay() === 0 || d.getDay() === 6
-    if (isWeekend) {
+    const isHoliday = !!isJapaneseHoliday(d)
+    if (isHoliday) {
+      sheet.getCell(headerOffset + 2, col).fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FCE7F3' }, // ピンク系の色（bg-pink-50相当）
+      }
+    } else if (isWeekend) {
       sheet.getCell(headerOffset + 2, col).fill = {
         type: 'pattern',
         pattern: 'solid',
@@ -203,16 +211,26 @@ export async function POST(
     const hex = color.hex
     for (let c = fromCol; c <= toCol; c += 1) {
       const cell = row.getCell(c)
-      cell.fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: hex },
+      // 列番号から日付を計算（列4が最初の日付列）
+      const dayIndex = c - 4
+      const date = addDays(startDate, dayIndex)
+      const isWeekend = date.getDay() === 0 || date.getDay() === 6
+      const isHoliday = !!isJapaneseHoliday(date)
+      
+      // 土日祝日にはタスクの色を塗らない
+      if (!isWeekend && !isHoliday) {
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: hex },
+        }
       }
+      // タスクの枠線は点線で描画
       cell.border = {
-        top: { style: 'thin' },
-        left: { style: 'thin' },
-        bottom: { style: 'thin' },
-        right: { style: 'thin' },
+        top: { style: 'dotted' },
+        left: { style: 'dotted' },
+        bottom: { style: 'dotted' },
+        right: { style: 'dotted' },
       }
     }
 
@@ -229,13 +247,24 @@ export async function POST(
       }
     }
 
-    // 週末の薄い背景
+    // 週末と祝日の薄い背景（タスクの色が塗られていないセルに適用）
     for (let i = 0; i < totalDays; i += 1) {
       const date = addDays(startDate, i)
       const isWeekend = date.getDay() === 0 || date.getDay() === 6
-      if (isWeekend) {
-        const cell = row.getCell(4 + i)  // 日付列の開始位置を変更
-        if (!cell.fill) {
+      const isHoliday = !!isJapaneseHoliday(date)
+      const col = 4 + i
+      const cell = row.getCell(col)
+      
+      // タスクの色が塗られていない場合のみ背景色を適用
+      if (!cell.fill) {
+        // 優先順位: 祝日 > 週末
+        if (isHoliday) {
+          cell.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FCE7F3' }, // ピンク系の色（bg-pink-50相当）
+          }
+        } else if (isWeekend) {
           cell.fill = {
             type: 'pattern',
             pattern: 'solid',
