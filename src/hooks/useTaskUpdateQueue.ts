@@ -958,6 +958,7 @@ export function useTaskUpdateQueue({
       queueManagerRef.current?.clearAll()
       queueManagerRef.current = null
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [maxRetries, processingDelay, batchWindow])
 
   // onBatchRefreshの更新は別のuseEffectで処理

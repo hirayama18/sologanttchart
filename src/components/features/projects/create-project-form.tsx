@@ -11,9 +11,10 @@ import { Plus, Copy } from 'lucide-react'
 
 interface CreateProjectFormProps {
   onProjectCreated: (project: ProjectResponse) => void
+  className?: string
 }
 
-export function CreateProjectForm({ onProjectCreated }: CreateProjectFormProps) {
+export function CreateProjectForm({ onProjectCreated, className }: CreateProjectFormProps) {
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [projects, setProjects] = useState<ProjectResponse[]>([])
@@ -118,7 +119,7 @@ export function CreateProjectForm({ onProjectCreated }: CreateProjectFormProps) 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button className="w-full">
+        <Button className={className}>
           <Plus className="h-4 w-4 mr-2" />
           新しいプロジェクト
         </Button>

@@ -57,11 +57,6 @@ export function TaskForm({ open, onOpenChange, onTaskCreated, projectId, task, t
         if (response.ok) {
           const options = await response.json()
           setAssigneeOptions(options.sort((a: AssigneeOption, b: AssigneeOption) => a.order - b.order))
-          
-          // フォームの初期値を設定（担当者選択肢の最初の項目）
-          if (options.length > 0 && !formData.assignee && !task) {
-            setFormData(prev => ({ ...prev, assignee: options[0].name }))
-          }
         }
       } catch (error) {
         console.error('Error loading assignee options:', error)
