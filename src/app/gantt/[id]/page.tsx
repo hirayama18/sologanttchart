@@ -7,10 +7,13 @@ import { GanttChart } from '@/components/features/gantt/gantt-chart'
 import { TaskForm } from '@/components/features/tasks/task-form'
 import { AssigneeSettingsDialog } from '@/components/features/projects/assignee-settings-dialog'
 import { Button } from '@/components/ui/button'
-import { ArrowLeft, BarChart3, Plus, Download, Calendar as CalendarIcon } from 'lucide-react'
+import { ArrowLeft, BarChart3, Plus, Download, Calendar as CalendarIcon, Check } from 'lucide-react'
 import { Input } from '@/components/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { useOptimizedTaskOperations } from '@/hooks/useOptimizedTaskOperations'
 import { useDebounce } from '@/hooks/useDebounce'
+import { usePersistentViewScale } from '@/hooks/usePersistentViewScale'
 
 export default function GanttPage() {
   const params = useParams()
@@ -28,6 +31,9 @@ export default function GanttPage() {
     startDate: '',
     endDate: '',
   })
+  const [viewScale, setViewScale] = usePersistentViewScale(projectId)
+  const [exporting, setExporting] = useState(false)
+  const viewScaleLabel = viewScale === 'DAY' ? '日' : '週'
 
   // onTasksChange用の再取得：デバウンス + 中断対応 + 差分マージ
   const refreshAbortRef = useRef<AbortController | null>(null)
@@ -202,6 +208,35 @@ export default function GanttPage() {
     setTaskFormOpen(true)
   }
 
+  const handleExport = useCallback(async (scale?: 'DAY' | 'WEEK') => {
+    const resolvedScale = scale ?? viewScale
+    setExporting(true)
+    try {
+      const res = await fetch(`/api/projects/${projectId}/export`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ timeScale: resolvedScale })
+      })
+      if (!res.ok) throw new Error('export failed')
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'gantt.xlsx'
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+    } catch (e) {
+      alert('エクスポートに失敗しました。')
+      console.error(e)
+    } finally {
+      setExporting(false)
+    }
+  }, [projectId, viewScale])
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -248,8 +283,20 @@ export default function GanttPage() {
                 <p className="text-gray-600">ガントチャート</p>
               </div>
             </div>
-            <div className="flex items-center space-x-2">
+            <div className="flex flex-wrap items-center gap-2 justify-end">
               <div className="text-sm text-gray-500 mr-2">総タスク数: {tasks.length}件</div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-500">ビュー</span>
+                <Select value={viewScale} onValueChange={(value) => setViewScale(value as 'DAY' | 'WEEK')}>
+                  <SelectTrigger className="w-[120px]">
+                    <SelectValue placeholder="表示単位を選択" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="DAY">日表示</SelectItem>
+                    <SelectItem value="WEEK">週表示</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               <AssigneeSettingsDialog 
                 projectId={projectId}
                 onOptionsUpdate={() => {
@@ -269,33 +316,40 @@ export default function GanttPage() {
                 <Plus className="h-4 w-4 mr-2" />
                 新しいタスク
               </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={async () => {
-                  try {
-                    const res = await fetch(`/api/projects/${projectId}/export`, {
-                      method: 'POST',
-                    })
-                    if (!res.ok) throw new Error('export failed')
-                    const blob = await res.blob()
-                    const url = URL.createObjectURL(blob)
-                    const a = document.createElement('a')
-                    a.href = url
-                    a.download = 'gantt.xlsx'
-                    document.body.appendChild(a)
-                    a.click()
-                    a.remove()
-                    URL.revokeObjectURL(url)
-                  } catch (e) {
-                    alert('エクスポートに失敗しました。')
-                    console.error(e)
-                  }
-                }}
-              >
-                <Download className="h-4 w-4 mr-2" />
-                エクスポート
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={exporting}
+                  >
+                    <Download className="h-4 w-4 mr-2" />
+                    {exporting ? 'エクスポート中...' : 'エクスポート'}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuLabel>エクスポートの単位</DropdownMenuLabel>
+                  <DropdownMenuItem onClick={() => handleExport(viewScale)}>
+                    <div className="flex w-full items-center justify-between">
+                      <span>現在のビュー（{viewScaleLabel}）</span>
+                      <Check className="h-4 w-4 text-blue-600" />
+                    </div>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => handleExport('DAY')}>
+                    <div className="flex w-full items-center justify-between">
+                      <span>日単位でエクスポート</span>
+                      {viewScale === 'DAY' && <Check className="h-4 w-4 text-muted-foreground" />}
+                    </div>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleExport('WEEK')}>
+                    <div className="flex w-full items-center justify-between">
+                      <span>週単位でエクスポート</span>
+                      {viewScale === 'WEEK' && <Check className="h-4 w-4 text-muted-foreground" />}
+                    </div>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
         </div>
@@ -363,6 +417,7 @@ export default function GanttPage() {
           <GanttChart
             project={project}
             tasks={tasks}
+            viewScale={viewScale}
             onTasksChange={handleTasksChange}
             onTaskUpdate={handleTaskUpdate}
             onTaskDuplicate={duplicateTask}

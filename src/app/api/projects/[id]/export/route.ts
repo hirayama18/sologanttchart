@@ -74,8 +74,12 @@ function buildTimelineUnits(startDate: Date, endDate: Date, isWeekly: boolean): 
   return units
 }
 
+type ExportRequestBody = {
+  timeScale?: 'DAY' | 'WEEK'
+}
+
 export async function POST(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -88,6 +92,16 @@ export async function POST(
       })
     }
     const { userId } = authResult
+
+    const contentType = request.headers.get('content-type') ?? ''
+    let body: ExportRequestBody | null = null
+    if (contentType.includes('application/json')) {
+      try {
+        body = await request.json()
+      } catch {
+        body = null
+      }
+    }
 
     const { id } = await params
     const { ProjectDAL } = await import('@/dal/projects')
@@ -118,7 +132,11 @@ export async function POST(
   // 設定（ローカル日付で統一）
   const startDate = startOfDay(parseDateOnlyToLocal(project.startDate))
   const endDate = project.endDate ? startOfDay(parseDateOnlyToLocal(project.endDate)) : addDays(startDate, 6 * 30 - 1)
-  const isWeekly = project.timeScale === 'WEEK'
+  const requestedScale = body?.timeScale
+  const exportScale = requestedScale === 'WEEK' || requestedScale === 'DAY'
+    ? requestedScale
+    : project.timeScale
+  const isWeekly = exportScale === 'WEEK'
   const timelineUnits = buildTimelineUnits(startDate, endDate, isWeekly)
   const timelineColumnCount = timelineUnits.length
   const timelineStart = timelineUnits[0]?.start ?? startDate

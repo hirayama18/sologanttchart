@@ -170,9 +170,10 @@ interface GanttChartProps {
   onTaskDuplicate?: (task: TaskResponse) => Promise<TaskResponse | null>
   onTaskDelete?: (task: TaskResponse) => Promise<boolean>
   onTaskReorder?: (newOrderIds: string[]) => void // 楽観的UI更新用
+  viewScale?: 'DAY' | 'WEEK'
 }
 
-export function GanttChart({ project, tasks, onTasksChange, onEditTask, onTaskUpdate, onTaskDuplicate, onTaskDelete, onTaskReorder }: GanttChartProps) {
+export function GanttChart({ project, tasks, onTasksChange, onEditTask, onTaskUpdate, onTaskDuplicate, onTaskDelete, onTaskReorder, viewScale }: GanttChartProps) {
   // 色設定の状態管理
   const [colorSettings, setColorSettings] = React.useState<Record<string, number>>({})
   
@@ -237,7 +238,8 @@ export function GanttChart({ project, tasks, onTasksChange, onEditTask, onTaskUp
   }, [projectStartDay, project.endDate])
 
   // 1日あたりの描画幅（px）- メモ化
-  const isWeekly = project.timeScale === 'WEEK'
+  const resolvedScale = viewScale ?? project.timeScale ?? 'DAY'
+  const isWeekly = resolvedScale === 'WEEK'
   const DAY_WIDTH_PX = useMemo(() => isWeekly ? 7.2 : 32, [isWeekly]) // 週単位なら1週間で約50px (7.2 * 7 = 50.4)
   const timelineWidthPx = useMemo(() => visibleDates.length * DAY_WIDTH_PX, [visibleDates.length, DAY_WIDTH_PX])
 
@@ -603,7 +605,7 @@ export function GanttChart({ project, tasks, onTasksChange, onEditTask, onTaskUp
         <div className="w-72 xl:w-80 border-r bg-gray-50">
           {/* タスクリストヘッダー（ガントヘッダーと同じ高さに統一） */}
           <div
-            className={`${project.timeScale === 'WEEK' ? 'h-[4.5rem]' : 'h-16'} border-b bg-white font-semibold flex items-center px-4`}
+            className={`${isWeekly ? 'h-[4.5rem]' : 'h-16'} border-b bg-white font-semibold flex items-center px-4`}
           >
             タスク
           </div>

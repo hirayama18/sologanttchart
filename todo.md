@@ -64,3 +64,11 @@
   - 対象: プロジェクト作成フォーム、ガントチャートコンポーネント、API
   - 内容: プロジェクト作成時に日単位/週単位を選択可能にし、ガントチャートのヘッダー・グリッドを切り替え
   - 機能: `timeScale`フィールド対応、週次ヘッダー（年/月/週）、週区切りのグリッド表示
+- [x] 🟡 日/週ビュー切替とエクスポート粒度選択
+  - 対象: `src/app/gantt/[id]/page.tsx`, `src/components/features/gantt/gantt-chart.tsx`, `src/app/api/projects/[id]/export/route.ts`
+  - 内容: プロジェクト表示は常に日単位を初期表示にしつつ、画面上で週表示へ切替可能に変更
+  - 機能: ビュー切替セレクト、エクスポート時の単位選択ドロップダウン、APIでの粒度切替処理追加
+- [x] 🟢 ビュー切替設定の永続化とエクスポートUI改善
+  - 対象: `src/hooks/usePersistentViewScale.ts`, `src/app/gantt/[id]/page.tsx`
+  - 内容: プロジェクトごとの表示単位をlocalStorageへ保存し、再訪時も前回と同じビューを自動復元
+  - 機能: `usePersistentViewScale`フック、現在ビューでの即時エクスポート/単位別のチェック表示
