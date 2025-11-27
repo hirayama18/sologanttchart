@@ -1,70 +1,97 @@
 "use client"
 
-import { ArrowRight, Calendar, CheckCircle, Users } from "lucide-react"
+import { ArrowRight, CheckCircle, PlayCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { SignUpButton } from "@clerk/nextjs"
+import { motion } from "framer-motion"
+import { HeroPreview } from "./hero-preview"
+
+const container = {
+  hidden: { opacity: 0 },
+  show: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.1,
+      delayChildren: 0.3
+    }
+  }
+}
+
+const item = {
+  hidden: { opacity: 0, y: 20 },
+  show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 50 } as const }
+}
 
 export function HeroSection() {
   return (
-    <section className="relative overflow-hidden bg-gradient-to-br from-blue-50 via-white to-purple-50 py-20 lg:py-28">
-      {/* 背景装飾 */}
-      <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZGVmcz48cGF0dGVybiBpZD0iZ3JpZCIgd2lkdGg9IjYwIiBoZWlnaHQ9IjYwIiBwYXR0ZXJuVW5pdHM9InVzZXJTcGFjZU9uVXNlIj48cGF0aCBkPSJNIDYwIDAgTCAwIDAgMCA2MCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjZjJmNGY3IiBzdHJva2Utd2lkdGg9IjEiLz48L3BhdHRlcm4+PC9kZWZzPjxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbGw9InVybCgjZ3JpZCkiLz48L3N2Zz4=')] opacity-30"></div>
-      
-      <div className="relative mx-auto max-w-7xl px-6 lg:px-8">
-        <div className="mx-auto max-w-4xl text-center">
-          <div className="mb-8 inline-flex items-center rounded-full bg-blue-100 px-6 py-3 text-sm font-medium text-blue-800">
-            <Calendar className="mr-2 h-4 w-4" />
-            <span>プロジェクト管理をもっとシンプルに</span>
-          </div>
-          
-          <h1 className="text-4xl font-bold tracking-tight text-gray-900 sm:text-6xl lg:text-7xl">
-            プロジェクトの進捗を
-            <span className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-              {" "}視覚的に管理
-            </span>
-          </h1>
-          
-          <p className="mx-auto mt-6 max-w-2xl text-lg leading-8 text-gray-600 sm:text-xl">
-            直感的なガントチャートで、チームの生産性を向上させましょう。
-            ドラッグ&ドロップでタスクを管理し、プロジェクトの全体像を一目で把握できます。
-          </p>
-          
-          <div className="mt-10 flex flex-col items-center justify-center gap-6 sm:flex-row">
-            <SignUpButton mode="modal" fallbackRedirectUrl="/projects">
-              <Button size="lg" className="bg-gradient-to-r from-blue-600 to-purple-600 px-8 py-4 text-lg font-semibold text-white hover:from-blue-700 hover:to-purple-700">
-                無料で始める
-                <ArrowRight className="ml-2 h-5 w-5" />
-              </Button>
-            </SignUpButton>
+    <section className="relative overflow-hidden bg-white pt-24 pb-20 lg:pt-32 lg:pb-28">
+      {/* 背景の装飾 */}
+      <div className="absolute top-0 left-0 w-full h-full overflow-hidden -z-10 pointer-events-none">
+        <div className="absolute top-[-10%] right-[-5%] w-[500px] h-[500px] rounded-full bg-purple-100/50 blur-3xl animate-blob" />
+        <div className="absolute bottom-[-10%] left-[-5%] w-[500px] h-[500px] rounded-full bg-blue-100/50 blur-3xl animate-blob animation-delay-2000" />
+        <div className="absolute top-[20%] left-[20%] w-[400px] h-[400px] rounded-full bg-pink-100/30 blur-3xl animate-blob animation-delay-4000" />
+      </div>
+
+      <div className="mx-auto max-w-7xl px-6 lg:px-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+          {/* 左側：テキストコンテンツ */}
+          <motion.div 
+            variants={container}
+            initial="hidden"
+            animate="show"
+            className="max-w-2xl text-left"
+          >
+            <motion.div variants={item} className="mb-6 inline-flex items-center rounded-full bg-blue-50 px-3 py-1 text-sm font-medium text-blue-700 border border-blue-100 ring-4 ring-blue-50/50">
+              <span className="flex h-2 w-2 rounded-full bg-blue-600 mr-2 animate-pulse"></span>
+              New: AIスケジュール最適化機能
+            </motion.div>
             
-            <Button variant="outline" size="lg" className="px-8 py-4 text-lg font-semibold">
-              デモを見る
-            </Button>
-          </div>
-          
-          {/* 統計情報 */}
-          <div className="mt-16 grid grid-cols-1 gap-8 sm:grid-cols-3">
-            <div className="flex flex-col items-center">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-100">
-                <Users className="h-6 w-6 text-blue-600" />
+            <motion.h1 variants={item} className="text-4xl font-bold tracking-tight text-gray-900 sm:text-6xl lg:text-7xl leading-[1.1]">
+              プロジェクト管理を
+              <br />
+              <span className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                もっと自由に、
+              </span>
+              <br />
+              もっと直感的に。
+            </motion.h1>
+            
+            <motion.p variants={item} className="mt-6 text-lg leading-8 text-gray-600 sm:text-xl">
+              複雑なタスク管理から解放されましょう。
+              <br className="hidden sm:block" />
+              日単位・週単位の切り替えも、タスクの並び替えも、
+              驚くほどスムーズに。
+            </motion.p>
+            
+            <motion.div variants={item} className="mt-10 flex flex-wrap gap-4">
+              <SignUpButton mode="modal" fallbackRedirectUrl="/projects">
+                <Button size="lg" className="h-14 px-8 text-lg bg-gray-900 hover:bg-gray-800 text-white rounded-full shadow-lg shadow-blue-500/20 hover:shadow-blue-500/30 transition-all hover:-translate-y-1">
+                  無料で始める
+                  <ArrowRight className="ml-2 h-5 w-5" />
+                </Button>
+              </SignUpButton>
+              
+              <Button variant="outline" size="lg" className="h-14 px-8 text-lg rounded-full border-2 hover:bg-gray-50 transition-all">
+                <PlayCircle className="mr-2 h-5 w-5" />
+                デモを見る
+              </Button>
+            </motion.div>
+
+            <motion.div variants={item} className="mt-10 flex items-center gap-6 text-sm text-gray-500">
+              <div className="flex items-center gap-2">
+                <CheckCircle className="w-4 h-4 text-green-500" />
+                <span>クレジットカード不要</span>
               </div>
-              <div className="mt-4 text-2xl font-bold text-gray-900">10,000+</div>
-              <div className="text-sm text-gray-600">アクティブユーザー</div>
-            </div>
-            <div className="flex flex-col items-center">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-100">
-                <CheckCircle className="h-6 w-6 text-green-600" />
+              <div className="flex items-center gap-2">
+                <CheckCircle className="w-4 h-4 text-green-500" />
+                <span>14日間無料トライアル</span>
               </div>
-              <div className="mt-4 text-2xl font-bold text-gray-900">50,000+</div>
-              <div className="text-sm text-gray-600">完了プロジェクト</div>
-            </div>
-            <div className="flex flex-col items-center">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-purple-100">
-                <Calendar className="h-6 w-6 text-purple-600" />
-              </div>
-              <div className="mt-4 text-2xl font-bold text-gray-900">99.9%</div>
-              <div className="text-sm text-gray-600">稼働率</div>
-            </div>
+            </motion.div>
+          </motion.div>
+
+          {/* 右側：プレビュー（ここをリッチにする） */}
+          <div className="relative lg:h-[600px] flex items-center justify-center">
+             <HeroPreview />
           </div>
         </div>
       </div>
