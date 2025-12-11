@@ -1,11 +1,10 @@
 'use client'
 
-import React, { useMemo, memo, useCallback, useEffect } from 'react'
+import React, { useMemo, memo, useCallback } from 'react'
 import { Pencil, Trash2, Copy } from 'lucide-react'
 import { TaskResponse, ProjectWithTasksResponse } from '@/lib/types/api'
 import { format, addDays, startOfDay, differenceInCalendarDays, isWeekend } from 'date-fns'
 import { ja } from 'date-fns/locale'
-import { useOptimizedTaskUpdate } from '@/hooks/useOptimizedTaskUpdate'
 import { getAssigneeColorWithSettings } from '@/lib/colors'
 import { isJapaneseHoliday } from '@/lib/utils'
 import { ColorLegend } from './color-legend'
@@ -100,17 +99,6 @@ const TaskBar = memo(({ task, visibleDates, dragState, DAY_WIDTH_PX, onMouseDown
 
   const isCompleted = !!task.completedAt
   const colorClass = isCompleted ? 'bg-gray-400' : getAssigneeColor(task.assignee)
-  
-  // デバッグ用: すべてのタスクの情報をログ出力
-  console.log('Task rendering:', {
-    id: task.id,
-    title: task.title,
-    completedAt: task.completedAt,
-    completedAtType: typeof task.completedAt,
-    isCompleted,
-    colorClass,
-    hasCompletedAt: !!task.completedAt
-  })
 
   return (
     <div
@@ -164,16 +152,15 @@ TaskBar.displayName = 'TaskBar'
 interface GanttChartProps {
   project: ProjectWithTasksResponse
   tasks: TaskResponse[]
-  onTasksChange?: () => void
   onEditTask?: (task: TaskResponse) => void
   onTaskUpdate?: (taskId: string, updates: Partial<TaskResponse>) => void
   onTaskDuplicate?: (task: TaskResponse) => Promise<TaskResponse | null>
   onTaskDelete?: (task: TaskResponse) => Promise<boolean>
-  onTaskReorder?: (newOrderIds: string[]) => void // 楽観的UI更新用
+  onTaskReorder?: (newOrderIds: string[]) => void
   viewScale?: 'DAY' | 'WEEK'
 }
 
-export function GanttChart({ project, tasks, onTasksChange, onEditTask, onTaskUpdate, onTaskDuplicate, onTaskDelete, onTaskReorder, viewScale }: GanttChartProps) {
+export function GanttChart({ project, tasks, onEditTask, onTaskUpdate, onTaskDuplicate, onTaskDelete, onTaskReorder, viewScale }: GanttChartProps) {
   // 色設定の状態管理
   const [colorSettings, setColorSettings] = React.useState<Record<string, number>>({})
   
@@ -193,33 +180,6 @@ export function GanttChart({ project, tasks, onTasksChange, onEditTask, onTaskUp
     
     loadColorSettings()
   }, [project.id])
-
-  // 最適化されたタスク更新フック（デバウンシング + バッチ処理 + マージ機能 + キューシステム）
-  const { updateTask: optimizedUpdateTask, flushPendingUpdates, hasPendingUpdates, getQueueStatus } = useOptimizedTaskUpdate({
-    onLocalUpdate: onTaskUpdate || (() => {}),
-    onBatchRefresh: onTasksChange,
-    debounceDelay: 1000, // 1000ms後にAPI呼び出し（高速操作対応）
-    batchDelay: 500,     // 500ms以内の複数更新をバッチ処理（強化）
-    useQueueSystem: true // キューシステム有効化！
-  })
-
-  // キューシステムのデバッグ情報表示（テスト用）
-  React.useEffect(() => {
-    const interval = setInterval(() => {
-      const queueStatus = getQueueStatus()
-      const hasQueues = Object.keys(queueStatus).length > 0
-      
-      if (hasQueues) {
-        console.log('🔄 Queue Status:', {
-          activeQueues: Object.keys(queueStatus).length,
-          queueDetails: queueStatus,
-          timestamp: new Date().toLocaleTimeString()
-        })
-      }
-    }, 2000) // 2秒ごとにキューの状態をログ出力
-
-    return () => clearInterval(interval)
-  }, [getQueueStatus])
 
   // プロジェクト開始日（ローカル日単位に正規化）
   const projectStartDay = useMemo(() => startOfDay(parseDateOnlyToLocal(project.startDate)), [project.startDate])
@@ -250,55 +210,11 @@ export function GanttChart({ project, tasks, onTasksChange, onEditTask, onTaskUp
   const [dragTaskId, setDragTaskId] = React.useState<string | null>(null)
   const [dropTargetId, setDropTargetId] = React.useState<string | null>(null)
   const [dropPosition, setDropPosition] = React.useState<'before' | 'after' | null>(null)
-  const handleReorder = async (newOrderIds: string[]) => {
-    // 1. 即座にUIを更新（楽観的UI更新）
+  
+  const handleReorder = (newOrderIds: string[]) => {
+    // ローカルステートのみ更新（保存は手動）
     onTaskReorder?.(newOrderIds)
-    
-    // 2. バックグラウンドでAPI呼び出し
-    try {
-      const res = await fetch('/api/tasks/reorder', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderedIds: newOrderIds }),
-      })
-      if (!res.ok) throw new Error('reorder failed')
-      // API成功時は追加のUIアップデートは不要（既に楽観的に更新済み）
-    } catch (e) {
-      console.error(e)
-      alert('並び替えの保存に失敗しました。ページを再読み込みして最新の状態を確認してください。')
-      // エラー時はデータを再取得してUIを正しい状態に戻す
-      onTasksChange?.()
-    }
   }
-
-  // ページ離脱時やコンポーネントアンマウント時の保留中更新処理
-  useEffect(() => {
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (hasPendingUpdates()) {
-        e.preventDefault()
-        e.returnValue = '保存されていない変更があります。ページを離れますか？'
-      }
-    }
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'hidden' && hasPendingUpdates()) {
-        // ページが非表示になる時に保留中の更新を強制実行
-        flushPendingUpdates()
-      }
-    }
-
-    window.addEventListener('beforeunload', handleBeforeUnload)
-    document.addEventListener('visibilitychange', handleVisibilityChange)
-
-    return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload)
-      document.removeEventListener('visibilitychange', handleVisibilityChange)
-      // コンポーネントアンマウント時も保留中の更新を実行
-      if (hasPendingUpdates()) {
-        flushPendingUpdates()
-      }
-    }
-  }, [hasPendingUpdates, flushPendingUpdates])
 
   const clampToVisible = React.useCallback((date: Date) => {
     const min = visibleDates[0]
@@ -320,14 +236,6 @@ export function GanttChart({ project, tasks, onTasksChange, onEditTask, onTaskUp
 
   // メモ化されたマウスダウンハンドラー
   const handleMouseDown = useCallback((event: React.MouseEvent, taskId: string, dragType: 'move' | 'resize-left' | 'resize-right') => {
-    console.log('🖱️ MouseDown event:', {
-      taskId,
-      dragType,
-      eventType: event.type,
-      target: event.target,
-      timestamp: new Date().toLocaleTimeString()
-    })
-    
     event.preventDefault()
     document.body.style.cursor = dragType === 'move' ? 'grabbing' : 'ew-resize'
     document.body.style.userSelect = 'none'
@@ -385,52 +293,21 @@ export function GanttChart({ project, tasks, onTasksChange, onEditTask, onTaskUp
     const handleUp = () => {
       if (!dragState) return
       
-      console.log('🖱️ MouseUp event - Drag completed:', {
-        taskId: dragState.taskId,
-        originalStart: dragState.originalStart.toISOString(),
-        originalEnd: dragState.originalEnd.toISOString(),
-        previewStart: dragState.previewStart.toISOString(),
-        previewEnd: dragState.previewEnd.toISOString(),
-        timestamp: new Date().toLocaleTimeString()
-      })
-      
-      const updatedStartISO = dragState.previewStart.toISOString()
-      const updatedEndISO = dragState.previewEnd.toISOString()
-      const originalStartISO = dragState.originalStart.toISOString()
-      const originalEndISO = dragState.originalEnd.toISOString()
-      
-      // API更新データ（YYYY-MM-DDで送信し、サーバー側でローカル深夜に固定）
-      const apiUpdateData = {
+      // ローカルステートのみ更新（保存は手動）
+      const updateData = {
         plannedStart: formatAsYmd(dragState.previewStart),
         plannedEnd: formatAsYmd(dragState.previewEnd),
       }
       
-      // UI更新データ（ISO形式）
-      const uiUpdateData = {
-        plannedStart: updatedStartISO,
-        plannedEnd: updatedEndISO,
-      }
-      
-      // ロールバック用の元データ
-      const originalData = {
-        plannedStart: originalStartISO,
-        plannedEnd: originalEndISO,
-      }
-      
-      // ドラッグ状態をクリア（UI即座に反応）
       const taskId = dragState.taskId
       setDragState(null)
       document.body.style.cursor = ''
       document.body.style.userSelect = ''
       
-      // 最適化されたタスク更新（デバウンシング + バッチ処理 + 楽観的UI）
-      // UI更新は即座に実行
+      // ローカルステートを即座に更新
       if (onTaskUpdate) {
-        onTaskUpdate(taskId, uiUpdateData)
+        onTaskUpdate(taskId, updateData)
       }
-      
-      // API更新はデバウンシング処理を使用
-      optimizedUpdateTask(taskId, apiUpdateData, originalData)
     }
 
     document.addEventListener('mousemove', handleMove)
@@ -439,7 +316,7 @@ export function GanttChart({ project, tasks, onTasksChange, onEditTask, onTaskUp
       document.removeEventListener('mousemove', handleMove)
       document.removeEventListener('mouseup', handleUp)
     }
-  }, [dragState, onTasksChange, onTaskUpdate, visibleDates, clampToVisible, addDaysSafe, pxToDays, optimizedUpdateTask])
+  }, [dragState, onTaskUpdate, visibleDates, clampToVisible, addDaysSafe, pxToDays])
 
   // 月ごとのセグメントを作成（上段にまとめて表示）
   const monthSegments = useMemo(() => {
@@ -674,10 +551,6 @@ export function GanttChart({ project, tasks, onTasksChange, onEditTask, onTaskUp
 
                 if (!srcTask || !dstTask || srcParentId !== dstParentId) return
                 
-                console.log('Dragging:', {
-                  srcId, dstId, srcParentId, dstParentId, dropPosition
-                })
-                
                 // sortedTasks（表示順）をベースに並び替えを行う
                 const currentIds = sortedTasks.map((t) => t.id)
                 const fromIndex = currentIds.indexOf(srcId)
@@ -787,18 +660,7 @@ export function GanttChart({ project, tasks, onTasksChange, onEditTask, onTaskUp
                       className="inline-flex items-center justify-center h-7 w-7 rounded-md border border-input bg-background text-gray-700 hover:bg-accent"
                       onClick={async () => {
                         if (onTaskDuplicate) {
-                          // 楽観的UI更新を使用（即座にUIが反映される）
                           await onTaskDuplicate(task)
-                        } else {
-                          // フォールバック：従来の同期的処理
-                          try {
-                            const res = await fetch(`/api/tasks/${task.id}/duplicate`, { method: 'POST' })
-                            if (!res.ok) throw new Error('failed')
-                            onTasksChange?.()
-                          } catch (e) {
-                            alert('タスクのコピーに失敗しました。')
-                            console.error(e)
-                          }
                         }
                       }}
                     >
@@ -810,19 +672,7 @@ export function GanttChart({ project, tasks, onTasksChange, onEditTask, onTaskUp
                     className="inline-flex items-center justify-center h-7 w-7 rounded-md border border-input bg-background text-red-700 hover:bg-red-50"
                     onClick={async () => {
                       if (onTaskDelete) {
-                        // 楽観的UI更新を使用（即座にUIが反映される）
                         await onTaskDelete(task)
-                      } else {
-                        // フォールバック：従来の同期的処理
-                        if (!confirm('このタスクを削除しますか？')) return
-                        try {
-                          const res = await fetch(`/api/tasks/${task.id}`, { method: 'DELETE' })
-                          if (!res.ok) throw new Error('failed')
-                          onTasksChange?.()
-                        } catch (e) {
-                          alert('タスクの削除に失敗しました。')
-                          console.error(e)
-                        }
                       }
                     }}
                   >

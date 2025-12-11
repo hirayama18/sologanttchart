@@ -1,18 +1,18 @@
- 'use client'
+'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { ProjectWithTasksResponse, TaskResponse } from '@/lib/types/api'
+import { ProjectWithTasksResponse, TaskResponse, CreateTaskRequest } from '@/lib/types/api'
 import { GanttChart } from '@/components/features/gantt/gantt-chart'
 import { TaskForm } from '@/components/features/tasks/task-form'
 import { AssigneeSettingsDialog } from '@/components/features/projects/assignee-settings-dialog'
+import { SaveButton } from '@/components/features/gantt/save-button'
 import { Button } from '@/components/ui/button'
 import { ArrowLeft, BarChart3, Plus, Download, Calendar as CalendarIcon, Check } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
-import { useOptimizedTaskOperations } from '@/hooks/useOptimizedTaskOperations'
-import { useDebounce } from '@/hooks/useDebounce'
+import { useChangeTracker } from '@/hooks/useChangeTracker'
 import { usePersistentViewScale } from '@/hooks/usePersistentViewScale'
 
 export default function GanttPage() {
@@ -21,7 +21,6 @@ export default function GanttPage() {
   const projectId = params.id as string
   
   const [project, setProject] = useState<ProjectWithTasksResponse | null>(null)
-  const [tasks, setTasks] = useState<TaskResponse[]>([])
   const [loading, setLoading] = useState(true)
   const [taskFormOpen, setTaskFormOpen] = useState(false)
   const [editingTask, setEditingTask] = useState<TaskResponse | undefined>(undefined)
@@ -35,68 +34,34 @@ export default function GanttPage() {
   const [exporting, setExporting] = useState(false)
   const viewScaleLabel = viewScale === 'DAY' ? '日' : '週'
 
-  // onTasksChange用の再取得：デバウンス + 中断対応 + 差分マージ
-  const refreshAbortRef = useRef<AbortController | null>(null)
+  // 変更追跡システム
+  const {
+    localTasks,
+    hasChanges,
+    changeCount,
+    addTask,
+    updateTask,
+    deleteTask,
+    reorderTasks,
+    resetWithServerData,
+    getChangesForSave
+  } = useChangeTracker({ initialTasks: [] })
 
-  const mergeTasksById = useCallback((current: TaskResponse[], incoming: TaskResponse[]): TaskResponse[] => {
-    const currentMap = new Map(current.map(t => [t.id, t]))
-    // サーバー順（order）に従う
-    return incoming.map(next => {
-      const prev = currentMap.get(next.id)
-      if (!prev) return next
-      // 主要フィールドに変化がなければ参照を保つ（再レンダリング抑制）
-      const same = (
-        prev.title === next.title &&
-        prev.assignee === next.assignee &&
-        prev.plannedStart === next.plannedStart &&
-        prev.plannedEnd === next.plannedEnd &&
-        prev.order === next.order &&
-        prev.completedAt === next.completedAt
-      )
-      return same ? prev : next
-    })
-  }, [])
-
-  const refetchProjectNow = useCallback(async () => {
-    try {
-      // 直前のリクエストを中断
-      if (refreshAbortRef.current) {
-        refreshAbortRef.current.abort()
-      }
-      const controller = new AbortController()
-      refreshAbortRef.current = controller
-
-      const response = await fetch(`/api/projects/${projectId}`, {
-        cache: 'no-store',
-        headers: { 'Cache-Control': 'no-cache' },
-        signal: controller.signal
-      })
-      if (!response.ok) return
-      const projectData: ProjectWithTasksResponse = await response.json()
-      setProject(projectData)
-      setTasks(prev => mergeTasksById(prev, projectData.tasks))
-    } catch {
-      // 中断は無視
-    }
-  }, [projectId, mergeTasksById])
-
-  const refetchProjectDebounced = useDebounce(refetchProjectNow, 500)
-
+  // プロジェクト取得
   const fetchProject = useCallback(async () => {
     try {
       const response = await fetch(`/api/projects/${projectId}`, {
-        cache: 'no-store', // キャッシュを無効化
+        cache: 'no-store',
         headers: {
           'Cache-Control': 'no-cache'
         }
       })
       if (response.ok) {
         const projectData: ProjectWithTasksResponse = await response.json()
-        // デバッグ用ログ
         console.log('Frontend - Project data received:', projectData)
-        console.log('Frontend - Tasks with completedAt:', projectData.tasks.filter(task => task.completedAt))
         setProject(projectData)
-        setTasks(projectData.tasks)
+        // サーバーデータで変更追跡をリセット
+        resetWithServerData(projectData.tasks)
       } else {
         console.error('Failed to fetch project')
         router.push('/projects')
@@ -107,7 +72,7 @@ export default function GanttPage() {
     } finally {
       setLoading(false)
     }
-  }, [projectId, router])
+  }, [projectId, router, resetWithServerData])
 
   useEffect(() => {
     if (projectId) {
@@ -119,17 +84,28 @@ export default function GanttPage() {
     if (project) {
       setProjectForm({
         title: project.title,
-        // ローカル日付として扱う（YYYY-MM-DD）
         startDate: project.startDate.slice(0, 10),
         endDate: project.endDate ? project.endDate.slice(0, 10) : '',
       })
     }
   }, [project])
 
-  // Enterキーでタスク作成フォームを開く（ガントチャートに統一）
+  // ページ離脱警告
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasChanges) {
+        e.preventDefault()
+        e.returnValue = '保存されていない変更があります。ページを離れますか？'
+      }
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [hasChanges])
+
+  // Enterキーでタスク作成フォームを開く
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      // フォームが開いている場合やinput/textareaにフォーカスがある場合は無視
       if (taskFormOpen || 
           event.target instanceof HTMLInputElement || 
           event.target instanceof HTMLTextAreaElement ||
@@ -148,59 +124,69 @@ export default function GanttPage() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [taskFormOpen])
 
-  const handleTasksChange = () => {
-    // 連続更新をまとめて再取得
-    refetchProjectDebounced()
-  }
-
-  // 楽観的UI更新：特定のタスクのみローカル状態で更新
-  const handleTaskUpdate = useCallback((taskId: string, updates: Partial<TaskResponse>) => {
-    setTasks(prevTasks => 
-      prevTasks.map(task => 
-        task.id === taskId ? { ...task, ...updates } : task
-      )
-    )
-  }, [])
-
-  // 楽観的UI更新：新しいタスクをローカル状態に追加
-  const handleTaskAdd = useCallback((task: TaskResponse) => {
-    setTasks(prevTasks => [...prevTasks, task])
-  }, [])
-
-  // 楽観的UI更新：タスクをローカル状態から削除
-  const handleTaskRemove = useCallback((taskId: string) => {
-    setTasks(prevTasks => prevTasks.filter(task => task.id !== taskId))
-  }, [])
-
-  // 楽観的UI更新：タスクの並び順を変更
-  const handleTaskReorder = useCallback((newOrderIds: string[]) => {
-    setTasks(prevTasks => {
-      // 新しい順序に基づいてタスクを並び替え
-      const taskMap = new Map(prevTasks.map(task => [task.id, task]))
-      const reorderedTasks = newOrderIds
-        .map(id => taskMap.get(id))
-        .filter((task): task is TaskResponse => task !== undefined)
-        .map((task, index) => ({
-          ...task,
-          order: index + 1 // orderフィールドも更新
-        }))
+  // 一括保存処理
+  const handleSave = async (): Promise<boolean> => {
+    try {
+      const changes = getChangesForSave()
       
-      return reorderedTasks
-    })
-  }, [])
+      console.log('Saving changes:', changes)
 
-  // 最適化されたタスク操作フック（新規作成・編集・コピー・削除）
-  const { createTask, editTask, duplicateTask, deleteTask } = useOptimizedTaskOperations({
-    onLocalTaskAdd: handleTaskAdd,
-    onLocalTaskUpdate: handleTaskUpdate,
-    onLocalTaskRemove: handleTaskRemove,
-    onBatchRefresh: handleTasksChange
-  })
+      const response = await fetch(`/api/projects/${projectId}/batch-save`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(changes)
+      })
 
-  const handleTaskCreated = () => {
-    setTaskFormOpen(false)
-    handleTasksChange()
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.message || 'Save failed')
+      }
+
+      // 保存成功後、サーバーから最新データを取得してリセット
+      await fetchProject()
+      
+      return true
+    } catch (error) {
+      console.error('Save error:', error)
+      alert(`保存に失敗しました: ${(error as Error).message}`)
+      return false
+    }
   }
+
+  // タスク操作（ローカルステートのみ更新）
+  const handleLocalTaskAdd = useCallback((taskData: CreateTaskRequest): TaskResponse => {
+    return addTask(taskData)
+  }, [addTask])
+
+  const handleLocalTaskUpdate = useCallback((taskId: string, updates: Partial<TaskResponse>) => {
+    updateTask(taskId, updates)
+  }, [updateTask])
+
+  const handleLocalTaskDelete = useCallback(async (task: TaskResponse): Promise<boolean> => {
+    if (!confirm('このタスクを削除しますか？')) {
+      return false
+    }
+    deleteTask(task.id)
+    return true
+  }, [deleteTask])
+
+  const handleLocalTaskDuplicate = useCallback(async (originalTask: TaskResponse): Promise<TaskResponse | null> => {
+    // コピータスクを作成
+    const copyData: CreateTaskRequest = {
+      title: `${originalTask.title} (コピー)`,
+      assignee: originalTask.assignee,
+      plannedStart: originalTask.plannedStart,
+      plannedEnd: originalTask.plannedEnd,
+      completedAt: originalTask.completedAt,
+      projectId: originalTask.projectId,
+      parentId: originalTask.parentId || undefined
+    }
+    return addTask(copyData)
+  }, [addTask])
+
+  const handleLocalTaskReorder = useCallback((newOrderIds: string[]) => {
+    reorderTasks(newOrderIds)
+  }, [reorderTasks])
 
   // 新規作成ボタン
   const openCreateForm = () => {
@@ -273,7 +259,14 @@ export default function GanttPage() {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => router.push('/projects')}
+                onClick={() => {
+                  if (hasChanges) {
+                    if (!confirm('保存されていない変更があります。ページを離れますか？')) {
+                      return
+                    }
+                  }
+                  router.push('/projects')
+                }}
               >
                 <ArrowLeft className="h-4 w-4 mr-2" />
                 プロジェクト一覧
@@ -284,7 +277,15 @@ export default function GanttPage() {
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2 justify-end">
-              <div className="text-sm text-gray-500 mr-2">総タスク数: {tasks.length}件</div>
+              <div className="text-sm text-gray-500 mr-2">総タスク数: {localTasks.length}件</div>
+              
+              {/* 保存ボタン */}
+              <SaveButton 
+                hasChanges={hasChanges}
+                changeCount={changeCount}
+                onSave={handleSave}
+              />
+              
               <div className="flex items-center gap-2">
                 <span className="text-sm text-gray-500">ビュー</span>
                 <Select value={viewScale} onValueChange={(value) => setViewScale(value as 'DAY' | 'WEEK')}>
@@ -301,7 +302,6 @@ export default function GanttPage() {
                 projectId={projectId}
                 onOptionsUpdate={() => {
                   // 担当者設定が変更されたらタスクフォームを再読み込み
-                  // 実際の実装では、タスクフォームの担当者選択肢を更新する必要がある
                 }}
               />
               <Button
@@ -355,7 +355,7 @@ export default function GanttPage() {
         </div>
       </header>
 
-      {/* メインコンテンツ（ガントチャートに統一） */}
+      {/* メインコンテンツ */}
       <main className="w-full px-4 py-6">
         <div className="space-y-6">
           {editingProject && (
@@ -391,7 +391,6 @@ export default function GanttPage() {
                   try {
                     const payload: { title?: string; startDate: string; endDate: string | null } = {
                       title: projectForm.title?.trim() ? projectForm.title : undefined,
-                      // サーバー側はISOで受けるが、ローカル日をUTCずれなくISOにする
                       startDate: new Date(projectForm.startDate + 'T00:00:00').toISOString(),
                       endDate: projectForm.endDate ? new Date(projectForm.endDate + 'T00:00:00').toISOString() : null,
                     }
@@ -416,13 +415,12 @@ export default function GanttPage() {
           
           <GanttChart
             project={project}
-            tasks={tasks}
+            tasks={localTasks}
             viewScale={viewScale}
-            onTasksChange={handleTasksChange}
-            onTaskUpdate={handleTaskUpdate}
-            onTaskDuplicate={duplicateTask}
-            onTaskDelete={deleteTask}
-            onTaskReorder={handleTaskReorder}
+            onTaskUpdate={handleLocalTaskUpdate}
+            onTaskDuplicate={handleLocalTaskDuplicate}
+            onTaskDelete={handleLocalTaskDelete}
+            onTaskReorder={handleLocalTaskReorder}
             onEditTask={(task) => {
               setEditingTask(task)
               setTaskFormOpen(true)
@@ -431,25 +429,24 @@ export default function GanttPage() {
         </div>
       </main>
 
-      {/* タスク作成フォーム */}
+      {/* タスク作成/編集フォーム */}
       <TaskForm
         open={taskFormOpen}
         onOpenChange={(open) => {
           setTaskFormOpen(open)
           if (!open) {
-            // モーダルを閉じるときに編集状態をリセット
             setEditingTask(undefined)
           }
         }}
         onTaskCreated={() => {
           setEditingTask(undefined)
-          handleTaskCreated()
+          setTaskFormOpen(false)
         }}
         projectId={projectId}
         task={editingTask}
-        tasks={tasks}
-        optimizedCreateTask={createTask}
-        optimizedEditTask={editTask}
+        tasks={localTasks}
+        onLocalTaskAdd={handleLocalTaskAdd}
+        onLocalTaskUpdate={handleLocalTaskUpdate}
       />
     </div>
   )

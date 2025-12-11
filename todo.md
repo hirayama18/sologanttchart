@@ -72,3 +72,12 @@
   - 対象: `src/hooks/usePersistentViewScale.ts`, `src/app/gantt/[id]/page.tsx`
   - 内容: プロジェクトごとの表示単位をlocalStorageへ保存し、再訪時も前回と同じビューを自動復元
   - 機能: `usePersistentViewScale`フック、現在ビューでの即時エクスポート/単位別のチェック表示
+- [x] 🔴 手動保存方式への変更（ローカルステート一元管理）
+  - 対象: `src/hooks/useChangeTracker.ts`, `src/app/gantt/[id]/page.tsx`, `src/components/features/gantt/gantt-chart.tsx`, `src/components/features/tasks/task-form.tsx`
+  - 内容: タスクの自動保存を廃止し、手動保存方式に変更。すべての変更をローカルステートで管理し、保存ボタンを押したときのみDBに保存
+  - 機能:
+    - 変更追跡システム（useChangeTracker）: 新規作成/更新/削除/並び替えを追跡
+    - 一括保存API（/api/projects/[id]/batch-save）: トランザクションで一括保存
+    - 保存ボタン + 未保存インジケーター: 変更件数表示、保存状態の視覚的フィードバック
+    - ページ離脱警告: 未保存の変更がある場合に警告表示
+  - 効果: UIラグの解消、保存競合の防止、ユーザーによる保存タイミングの制御

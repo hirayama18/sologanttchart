@@ -20,13 +20,21 @@ interface TaskFormProps {
   projectId: string
   task?: TaskResponse // 編集モード用
   tasks?: TaskResponse[] // 親タスク選択用
-  // 最適化された操作関数（楽観的UI更新対応）
-  optimizedCreateTask?: (taskData: CreateTaskRequest) => Promise<TaskResponse | null>
-  optimizedEditTask?: (taskId: string, uiUpdates: Partial<TaskResponse>, originalData?: Partial<TaskResponse>, apiUpdates?: Partial<CreateTaskRequest>) => void
+  // ローカルステート更新用（手動保存方式）
+  onLocalTaskAdd?: (taskData: CreateTaskRequest) => TaskResponse
+  onLocalTaskUpdate?: (taskId: string, updates: Partial<TaskResponse>) => void
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export function TaskForm({ open, onOpenChange, onTaskCreated, projectId, task, tasks, optimizedCreateTask, optimizedEditTask: _ }: TaskFormProps) {
+export function TaskForm({ 
+  open, 
+  onOpenChange, 
+  onTaskCreated, 
+  projectId, 
+  task, 
+  tasks, 
+  onLocalTaskAdd,
+  onLocalTaskUpdate
+}: TaskFormProps) {
   const [loading, setLoading] = useState(false)
   const [assigneeOptions, setAssigneeOptions] = useState<AssigneeOption[]>([])
   const [formData, setFormData] = useState({
@@ -92,57 +100,63 @@ export function TaskForm({ open, onOpenChange, onTaskCreated, projectId, task, t
         parentId: 'none'
       })
     }
-  }, [task, assigneeOptions]) // assigneeOptions依存を追加（初期値設定のため）
+  }, [task, assigneeOptions])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
 
     try {
-      if (false) { // 一時的に楽観的UI更新を無効化
-        // 楽観的UI更新処理（現在無効化中）
-        console.log('楽観的UI更新は一時的に無効化されています')
-        
-      } else if (!isEditMode && optimizedCreateTask) {
-        // 新規作成モード：楽観的UI更新を使用
-        const requestData: CreateTaskRequest = {
+      if (isEditMode && task && onLocalTaskUpdate) {
+        // 編集モード：ローカルステートを更新
+        const updates: Partial<TaskResponse> = {
           title: formData.title,
           assignee: formData.assignee,
-          plannedStart: isParentTask ? null : formData.plannedStart,  // YYYY-MM-DD形式で送信
-          plannedEnd: isParentTask ? null : formData.plannedEnd,      // YYYY-MM-DD形式で送信
+          plannedStart: isParentTask ? null : formData.plannedStart,
+          plannedEnd: isParentTask ? null : formData.plannedEnd,
+          completedAt: formData.completedAt || null,
+          parentId: isParentTask ? null : formData.parentId
+        }
+        
+        onLocalTaskUpdate(task.id, updates)
+        onTaskCreated(task) // モーダルを閉じるためのコールバック
+        onOpenChange(false)
+        
+      } else if (!isEditMode && onLocalTaskAdd) {
+        // 新規作成モード：ローカルステートに追加
+        const taskData: CreateTaskRequest = {
+          title: formData.title,
+          assignee: formData.assignee,
+          plannedStart: isParentTask ? null : formData.plannedStart,
+          plannedEnd: isParentTask ? null : formData.plannedEnd,
           projectId,
-          // orderは送信しない（DALで自動計算される）
           completedAt: formData.completedAt || null,
           parentId: isParentTask ? null : formData.parentId
         }
 
-        // 楽観的UI更新（即座に仮タスクが返される）
-        const taskResponse = await optimizedCreateTask(requestData)
+        const newTask = onLocalTaskAdd(taskData)
+        onTaskCreated(newTask)
+        onOpenChange(false)
         
-        if (taskResponse) {
-          // 即座にコールバック実行とモーダル非表示
-          onTaskCreated(taskResponse)
-          onOpenChange(false)
-          
-          // フォームをリセット
-          const defaultAssignee = assigneeOptions.length > 0 ? assigneeOptions[0].name : ''
-          setFormData({
-            title: '',
-            assignee: defaultAssignee,
-            plannedStart: new Date().toISOString().split('T')[0],
-            plannedEnd: new Date().toISOString().split('T')[0],
-            completedAt: '',
-            parentId: 'none'
-          })
-        }
+        // フォームをリセット
+        const defaultAssignee = assigneeOptions.length > 0 ? assigneeOptions[0].name : ''
+        setFormData({
+          title: '',
+          assignee: defaultAssignee,
+          plannedStart: new Date().toISOString().split('T')[0],
+          plannedEnd: new Date().toISOString().split('T')[0],
+          completedAt: '',
+          parentId: 'none'
+        })
         
       } else {
-        // フォールバック：従来の同期的処理
+        // フォールバック（onLocalTaskAdd/onLocalTaskUpdateが提供されていない場合）
+        // 従来のAPI呼び出し（互換性のため残す）
         const url = isEditMode && task ? `/api/tasks/${task.id}` : '/api/tasks'
         const method = isEditMode ? 'PATCH' : 'POST'
         
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const requestData: any = { // 型定義の厳密なチェックを回避（CreateとUpdateで異なるため）
+        const requestData: any = {
           title: formData.title,
           assignee: formData.assignee,
           plannedStart: isParentTask ? null : formData.plannedStart,
@@ -163,7 +177,7 @@ export function TaskForm({ open, onOpenChange, onTaskCreated, projectId, task, t
           onTaskCreated(taskResponse)
           onOpenChange(false)
           
-            if (!isEditMode) {
+          if (!isEditMode) {
             const defaultAssignee = assigneeOptions.length > 0 ? assigneeOptions[0].name : ''
             setFormData({
               title: '',
@@ -209,6 +223,7 @@ export function TaskForm({ open, onOpenChange, onTaskCreated, projectId, task, t
           <DialogTitle>{isEditMode ? 'タスクを編集' : '新しいタスクを作成'}</DialogTitle>
           <DialogDescription>
             タスクの詳細情報を入力してください。
+            {onLocalTaskAdd && <span className="text-amber-600 ml-1">※変更は保存ボタンを押すまで反映されません</span>}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit}>
@@ -323,7 +338,7 @@ export function TaskForm({ open, onOpenChange, onTaskCreated, projectId, task, t
               type="submit" 
               disabled={!isFormValid || loading}
             >
-              {loading ? '保存中...' : isEditMode ? '更新' : '作成'}
+              {loading ? '処理中...' : isEditMode ? '更新' : '作成'}
             </Button>
           </DialogFooter>
         </form>
