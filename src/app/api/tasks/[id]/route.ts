@@ -211,8 +211,25 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Clerk認証からユーザーIDを取得
+    const authResult = await getAuthenticatedUserId()
+    if (isAuthError(authResult)) {
+      return authResult.error
+    }
+    const { userId } = authResult
+
     const { TaskDAL } = await import('@/dal/tasks')
     const { id } = await params
+    
+    // タスクの所有者チェック
+    const isOwner = await TaskDAL.isOwnerTask(id, userId)
+    if (!isOwner) {
+      return NextResponse.json(
+        { error: 'Forbidden: You do not have access to this task' },
+        { status: 403 }
+      )
+    }
+    
     await TaskDAL.delete(id)
     
     return NextResponse.json({ message: 'Task deleted successfully' })
