@@ -70,6 +70,10 @@ export async function POST(
     }
 
     // トランザクションで一括処理
+    // NOTE:
+    // 変更件数が多い場合、interactive transaction のデフォルト timeout により
+    // 途中でトランザクションがクローズされ「Transaction not found」になることがあるため
+    // 明示的に timeout / maxWait を延長する。
     const result = await prisma.$transaction(async (tx) => {
       const createdTasks: { tempId?: string; id: string }[] = []
       
@@ -213,6 +217,11 @@ export async function POST(
         deletedCount: deleted?.length || 0,
         reorderedCount: reordered?.length || 0
       }
+    }, {
+      // 取得待ち(接続待ち)と実行上限を拡張
+      // - SQLite / 開発環境で多数更新するとデフォルトでは足りないケースがある
+      maxWait: 30_000,
+      timeout: 30_000
     })
 
     const response: BatchSaveResponse = {

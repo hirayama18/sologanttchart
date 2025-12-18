@@ -81,3 +81,6 @@
     - 保存ボタン + 未保存インジケーター: 変更件数表示、保存状態の視覚的フィードバック
     - ページ離脱警告: 未保存の変更がある場合に警告表示
   - 効果: UIラグの解消、保存競合の防止、ユーザーによる保存タイミングの制御
+- [x] 🔴 一括保存のトランザクション安定化（Transaction not found 対策）
+  - 対象: `src/app/api/projects/[id]/batch-save/route.ts`
+  - 内容: interactive transaction の `timeout/maxWait` を延長し、多数更新時にトランザクションが途中で閉じて保存失敗しないように修正
