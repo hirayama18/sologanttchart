@@ -49,15 +49,6 @@ export async function GET(
       updatedAt: project.updatedAt.toISOString(),
       timeScale: project.timeScale,
         tasks: project.tasks.map(task => {
-          const completedAtValue = task.completedAt ? task.completedAt.toISOString() : null
-          // デバッグ用ログ
-          console.log('Project API - Task:', {
-            id: task.id,
-            title: task.title,
-            completedAt: task.completedAt,
-            completedAtValue,
-            completedAtType: typeof task.completedAt
-          })
           return {
             id: task.id,
             title: task.title,
@@ -70,7 +61,7 @@ export async function GET(
             parentId: task.parentId,
             createdAt: task.createdAt.toISOString(),
             updatedAt: task.updatedAt.toISOString(),
-            completedAt: completedAtValue
+            isCompleted: task.isCompleted
           } as TaskResponse
         })
     }
@@ -137,7 +128,8 @@ export async function PATCH(
         projectId: task.projectId,
         parentId: task.parentId,
         createdAt: task.createdAt.toISOString(),
-        updatedAt: task.updatedAt.toISOString()
+        updatedAt: task.updatedAt.toISOString(),
+        isCompleted: task.isCompleted
       } as TaskResponse))
     }
 

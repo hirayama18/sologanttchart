@@ -52,7 +52,7 @@ export function useOptimizedTaskOperations({
       assignee: taskData.assignee,
       plannedStart: toIsoOrNull(taskData.plannedStart),
       plannedEnd: toIsoOrNull(taskData.plannedEnd),
-      completedAt: toIsoOrNull(taskData.completedAt),
+      isCompleted: taskData.isCompleted === true,
       order: 999999, // 仮の値（APIで正しい値が設定される）
       deleted: false,
       projectId: taskData.projectId,

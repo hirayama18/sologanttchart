@@ -51,7 +51,7 @@ export async function GET(
       parentId: task.parentId,
       createdAt: task.createdAt.toISOString(),
       updatedAt: task.updatedAt.toISOString(),
-      completedAt: task.completedAt ? task.completedAt.toISOString() : null
+      isCompleted: task.isCompleted
     }
 
     return NextResponse.json(response)
@@ -97,6 +97,7 @@ export async function PATCH(
       plannedEnd: Date | null;
       order: number;
       parentId: string | null;
+      isCompleted: boolean;
     }> = {}
     
     if (body.title) updateData.title = body.title
@@ -147,48 +148,17 @@ export async function PATCH(
       }
     }
     if (body.order !== undefined) updateData.order = body.order
-
-    // completedAt は Prisma クライアントの世代差異でエラーになる可能性があるため、
-    // 本体更新とは分離して直接SQLで更新する（SQLite）。
-    const completedAtIso = body.completedAt
+    if (body.isCompleted !== undefined) {
+      if (typeof body.isCompleted !== 'boolean') {
+        return NextResponse.json(
+          { error: 'Invalid isCompleted: must be boolean', received: body.isCompleted },
+          { status: 400 }
+        )
+      }
+      updateData.isCompleted = body.isCompleted
+    }
 
     const task = await TaskDAL.update(id, updateData)
-
-    let finalCompletedAt: string | null = null
-    console.log('Task update API - completedAt processing:', {
-      taskId: id,
-      completedAtIso,
-      completedAtUndefined: completedAtIso === undefined,
-      originalCompletedAt: task.completedAt
-    })
-    
-    if (completedAtIso !== undefined) {
-      let dateOrNull: Date | null = null
-      if (completedAtIso) {
-        // YYYY-MM-DD形式の場合はT00:00:00.000Zを追加
-        const dateString = completedAtIso.includes('T') 
-          ? completedAtIso 
-          : completedAtIso + 'T00:00:00.000Z'
-        dateOrNull = new Date(dateString)
-        finalCompletedAt = dateOrNull.toISOString()
-        console.log('Task update API - Setting completedAt:', {
-          dateString,
-          dateOrNull,
-          finalCompletedAt
-        })
-      } else {
-        console.log('Task update API - Clearing completedAt')
-      }
-      const { prisma } = await import('@/lib/prisma')
-      await prisma.task.update({
-        where: { id },
-        data: { completedAt: dateOrNull }
-      })
-    } else {
-      // completedAtが更新されない場合は元の値を使用
-      finalCompletedAt = task.completedAt ? task.completedAt.toISOString() : null
-      console.log('Task update API - Using original completedAt:', finalCompletedAt)
-    }
     
     const response: TaskResponse = {
       id: task.id,
@@ -202,7 +172,7 @@ export async function PATCH(
       parentId: task.parentId,
       createdAt: task.createdAt.toISOString(),
       updatedAt: task.updatedAt.toISOString(),
-      completedAt: finalCompletedAt
+      isCompleted: task.isCompleted
     }
 
     return NextResponse.json(response)

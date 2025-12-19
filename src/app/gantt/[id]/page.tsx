@@ -177,7 +177,7 @@ export default function GanttPage() {
       assignee: originalTask.assignee,
       plannedStart: originalTask.plannedStart,
       plannedEnd: originalTask.plannedEnd,
-      completedAt: originalTask.completedAt,
+      isCompleted: originalTask.isCompleted,
       projectId: originalTask.projectId,
       parentId: originalTask.parentId || undefined
     }

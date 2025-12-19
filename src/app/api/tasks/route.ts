@@ -51,6 +51,13 @@ export async function POST(request: NextRequest) {
         return null;
       }
     }
+
+    if (body.isCompleted !== undefined && typeof body.isCompleted !== 'boolean') {
+      return NextResponse.json(
+        { error: 'Invalid isCompleted: must be boolean', received: body.isCompleted },
+        { status: 400 }
+      )
+    }
     
     const taskData = {
       title: body.title,
@@ -58,6 +65,7 @@ export async function POST(request: NextRequest) {
       assignee: body.assignee ?? '',
       plannedStart: parseDate(body.plannedStart),
       plannedEnd: parseDate(body.plannedEnd),
+      isCompleted: body.isCompleted === true,
       projectId: body.projectId,
       parentId: body.parentId || null,
       // orderはDALで自動計算されるため、明示的に指定しない
@@ -65,25 +73,6 @@ export async function POST(request: NextRequest) {
     }
 
     const task = await TaskDAL.create(taskData)
-
-    // completedAt を直接反映（Prismaの型安全なクエリを使用）
-    let completedAtValue: string | null = null
-    if (body.completedAt !== undefined) {
-      const { prisma } = await import('@/lib/prisma')
-      let dateOrNull: Date | null = null
-      if (body.completedAt) {
-        // YYYY-MM-DD形式の場合はT00:00:00.000Zを追加
-        const dateString = body.completedAt.includes('T') 
-          ? body.completedAt 
-          : body.completedAt + 'T00:00:00.000Z'
-        dateOrNull = new Date(dateString)
-        completedAtValue = dateOrNull.toISOString()
-      }
-      await prisma.task.update({
-        where: { id: task.id },
-        data: { completedAt: dateOrNull }
-      })
-    }
     
     const response: TaskResponse = {
       id: task.id,
@@ -97,7 +86,7 @@ export async function POST(request: NextRequest) {
       parentId: task.parentId,
       createdAt: task.createdAt.toISOString(),
       updatedAt: task.updatedAt.toISOString(),
-      completedAt: completedAtValue
+      isCompleted: task.isCompleted
     }
 
     return NextResponse.json(response, { status: 201 })

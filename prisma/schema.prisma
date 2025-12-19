@@ -31,6 +31,9 @@ model Task {
   assignee                                                 String
   plannedStart                                             DateTime?
   plannedEnd                                               DateTime?
+  /// 完了状態（UIはチェックボックスで制御）
+  isCompleted                                              Boolean             @default(false)
+  /// 旧仕様（完了日）。互換/移行用に残すが、UIでは非表示
   completedAt                                              DateTime?
   order                                                    Int                 @default(0)
   deleted                                                  Boolean             @default(false)

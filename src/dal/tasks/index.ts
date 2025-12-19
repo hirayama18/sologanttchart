@@ -3,6 +3,63 @@ import { CreateTaskData, UpdateTaskData, Task, TaskWithProject } from '@/lib/typ
 
 export class TaskDAL {
   /**
+   * プロジェクト配下の全タスクの plannedStart / plannedEnd を n 日シフト
+   * - deleted=true は除外
+   * - デフォルトでは 完了済み（isCompleted=true）も含める（includeCompleted=true）
+   * - plannedStart / plannedEnd が null の場合はそのまま
+   */
+  static async shiftPlannedDatesByProjectId(
+    projectId: string,
+    days: number,
+    options?: { includeCompleted?: boolean }
+  ): Promise<{ updatedCount: number }> {
+    // 0日の場合はDBを触らない
+    if (!Number.isFinite(days) || days === 0) {
+      return { updatedCount: 0 }
+    }
+
+    // デフォルトは完了済みも対象
+    const includeCompleted = options?.includeCompleted !== false
+
+    // Postgres: interval 加算で一括更新
+    // Prisma の map によりテーブル名は "tasks"、カラムは "plannedStart" 等の camelCase になる想定
+    const updatedCount = includeCompleted
+      ? await prisma.$executeRaw<number>`
+          UPDATE "tasks"
+          SET
+            "plannedStart" = CASE
+              WHEN "plannedStart" IS NULL THEN NULL
+              ELSE "plannedStart" + (${days} * INTERVAL '1 day')
+            END,
+            "plannedEnd" = CASE
+              WHEN "plannedEnd" IS NULL THEN NULL
+              ELSE "plannedEnd" + (${days} * INTERVAL '1 day')
+            END
+          WHERE
+            "projectId" = ${projectId}
+            AND "deleted" = false
+        `
+      : await prisma.$executeRaw<number>`
+          UPDATE "tasks"
+          SET
+            "plannedStart" = CASE
+              WHEN "plannedStart" IS NULL THEN NULL
+              ELSE "plannedStart" + (${days} * INTERVAL '1 day')
+            END,
+            "plannedEnd" = CASE
+              WHEN "plannedEnd" IS NULL THEN NULL
+              ELSE "plannedEnd" + (${days} * INTERVAL '1 day')
+            END
+          WHERE
+            "projectId" = ${projectId}
+            AND "deleted" = false
+            AND "isCompleted" = false
+        `
+
+    return { updatedCount }
+  }
+
+  /**
    * プロジェクトの全タスクを取得
    */
   static async getByProjectId(projectId: string): Promise<Task[]> {

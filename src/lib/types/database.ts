@@ -28,10 +28,10 @@ export type CreateTaskData = {
   assignee: string
   plannedStart?: Date | null
   plannedEnd?: Date | null
+  isCompleted?: boolean
   projectId: string
   parentId?: string | null
   order?: number
-  completedAt?: Date | null
 }
 
 export type UpdateTaskData = Partial<Omit<CreateTaskData, 'projectId'>>

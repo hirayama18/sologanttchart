@@ -112,7 +112,7 @@ export async function POST(
               ...(updates.assignee !== undefined && { assignee: updates.assignee }),
               ...(updates.plannedStart !== undefined && { plannedStart: parseDate(updates.plannedStart) }),
               ...(updates.plannedEnd !== undefined && { plannedEnd: parseDate(updates.plannedEnd) }),
-              ...(updates.completedAt !== undefined && { completedAt: parseDate(updates.completedAt) }),
+              ...(updates.isCompleted !== undefined && { isCompleted: updates.isCompleted }),
               ...(updates.parentId !== undefined && { parentId: resolvedParentId ?? null }),
               ...(updates.order !== undefined && { order: updates.order })
             }
@@ -182,7 +182,7 @@ export async function POST(
               assignee: taskData.assignee,
               plannedStart: parseDate(taskData.plannedStart),
               plannedEnd: parseDate(taskData.plannedEnd),
-              completedAt: parseDate(taskData.completedAt),
+              isCompleted: taskData.isCompleted === true,
               projectId: projectId,
               parentId: resolvedParentId,
               order: currentMaxOrder

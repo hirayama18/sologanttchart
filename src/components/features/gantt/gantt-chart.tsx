@@ -97,7 +97,7 @@ const TaskBar = memo(({ task, visibleDates, dragState, DAY_WIDTH_PX, onMouseDown
 
   if (!taskBarStyle) return null
 
-  const isCompleted = !!task.completedAt
+  const isCompleted = task.isCompleted
   const colorClass = isCompleted ? 'bg-gray-400' : getAssigneeColor(task.assignee)
 
   return (
@@ -635,9 +635,9 @@ export function GanttChart({ project, tasks, onEditTask, onTaskUpdate, onTaskDup
               )}
                 <div className={`w-full flex items-center justify-between gap-2 ${task.parentId ? 'pl-6 border-l-2 border-gray-200 ml-2' : ''}`}>
                   <div className="min-w-0">
-                    <div className={`font-medium text-sm leading-none truncate ${task.completedAt ? 'line-through text-gray-500' : ''} ${!task.parentId ? 'font-bold text-gray-800' : 'text-gray-600'}`}>
+                    <div className={`font-medium text-sm leading-none truncate ${task.isCompleted ? 'line-through text-gray-500' : ''} ${!task.parentId ? 'font-bold text-gray-800' : 'text-gray-600'}`}>
                       {task.title}
-                      {task.completedAt && <span className="ml-2 text-xs text-green-600">✓ 完了</span>}
+                      {task.isCompleted && <span className="ml-2 text-xs text-green-600">✓ 完了</span>}
                     </div>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">

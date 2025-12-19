@@ -43,7 +43,8 @@ export async function POST(
       projectId: task.projectId,
       parentId: task.parentId,
       createdAt: task.createdAt.toISOString(),
-      updatedAt: task.updatedAt.toISOString()
+      updatedAt: task.updatedAt.toISOString(),
+      isCompleted: task.isCompleted
     }
 
     return NextResponse.json(response, { status: 201 })

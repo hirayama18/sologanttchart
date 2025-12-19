@@ -306,7 +306,7 @@ export class TaskUpdateQueueManager {
     this.mergeField(batch, 'assignee', mergedUpdates, 'latest')
     this.mergeField(batch, 'plannedStart', mergedUpdates, 'chronological')
     this.mergeField(batch, 'plannedEnd', mergedUpdates, 'chronological')
-    this.mergeField(batch, 'completedAt', mergedUpdates, 'latest')
+    this.mergeField(batch, 'isCompleted', mergedUpdates, 'latest')
     this.mergeField(batch, 'order', mergedUpdates, 'latest')
 
     // マージされた更新を作成
@@ -391,10 +391,8 @@ export class TaskUpdateQueueManager {
           mergedUpdates[fieldName] = value as number
           break
         case 'deleted':
+        case 'isCompleted':
           mergedUpdates[fieldName] = value as boolean
-          break
-        case 'completedAt':
-          mergedUpdates[fieldName] = value as string | null
           break
       }
     }
@@ -505,7 +503,7 @@ export class TaskUpdateQueueManager {
     const conflicts: Array<{ field: keyof TaskResponse; currentValue: unknown; proposedValue: unknown }> = []
 
     // 重要なフィールドのみ競合チェック
-    const criticalFields: Array<keyof TaskResponse> = ['title', 'assignee', 'plannedStart', 'plannedEnd', 'completedAt']
+    const criticalFields: Array<keyof TaskResponse> = ['title', 'assignee', 'plannedStart', 'plannedEnd', 'isCompleted']
 
     criticalFields.forEach(field => {
       if (updates[field] !== undefined) {
@@ -588,9 +586,6 @@ export class TaskUpdateQueueManager {
     const pe = toIso(normalized.plannedEnd as unknown)
     if (pe !== null) normalized.plannedEnd = pe
 
-    const ca = toIso(normalized.completedAt as unknown)
-    if (ca !== null) normalized.completedAt = ca
-
     return normalized
   }
 
@@ -649,15 +644,9 @@ export class TaskUpdateQueueManager {
         }
         return { value: proposedValue, strategy: 'user_intent' }
 
-      case 'completedAt':
-        // 完了日時は最新の値を優先
-        if (currentValue && !proposedValue) {
-          return { value: currentValue, strategy: 'keep_completed' }
-        } else if (!currentValue && proposedValue) {
-          return { value: proposedValue, strategy: 'mark_completed' }
-        } else {
-          return { value: proposedValue, strategy: 'latest_completion' }
-        }
+      case 'isCompleted':
+        // 完了状態はユーザー操作を優先
+        return { value: proposedValue, strategy: 'user_intent' }
 
       default:
         // その他のフィールドは提案値を優先
@@ -706,7 +695,7 @@ export class TaskUpdateQueueManager {
     let urgencyBonus = 0
 
     // 完了状態の変更は高優先度
-    if (updates.completedAt !== undefined) {
+    if (updates.isCompleted !== undefined) {
       urgencyBonus += 2
     }
 

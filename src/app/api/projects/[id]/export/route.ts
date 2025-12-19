@@ -153,10 +153,10 @@ export async function POST(
   sheet.getCell('A2').font = { size: 12 }
 
   // 列のセットアップ
-  // A列: タスク名, B列: 完了日, C列: 担当, D列以降: 日付（期間列は非表示）
+  // A列: タスク名, B列: 完了(チェック), C列: 担当, D列以降: 日付
   const headerOffset = 3 // 1-based row index where headers start
   sheet.getColumn(1).width = 28
-  sheet.getColumn(2).width = 12  // 完了日列
+  sheet.getColumn(2).width = 6  // 完了列
   sheet.getColumn(3).width = 10  // 担当者列
   for (let i = 0; i < timelineColumnCount; i += 1) {
     const colIndex = firstTimelineColumn + i
@@ -250,13 +250,13 @@ export async function POST(
     }
   }
 
-  // 左側ヘッダー（タスク名、完了日、担当者）
+  // 左側ヘッダー（タスク名、完了、担当者）
   sheet.getCell(headerOffset, 1).value = 'タスク名'
   sheet.getCell(headerOffset, 1).alignment = { horizontal: 'center', vertical: 'middle' }
   sheet.getCell(headerOffset, 1).font = { bold: true }
   sheet.mergeCells(headerOffset, 1, headerOffset + headerRowCount - 1, 1)
 
-  sheet.getCell(headerOffset, 2).value = '完了日'
+  sheet.getCell(headerOffset, 2).value = '完了'
   sheet.getCell(headerOffset, 2).alignment = { horizontal: 'center', vertical: 'middle' }
   sheet.getCell(headerOffset, 2).font = { bold: true }
   sheet.mergeCells(headerOffset, 2, headerOffset + headerRowCount - 1, 2)
@@ -301,12 +301,8 @@ export async function POST(
       }
     }
     
-    // 完了日の表示（ローカル日付）
-    if (t.completedAt) {
-      row.getCell(2).value = format(parseDateOnlyToLocal(t.completedAt), 'yyyy/MM/dd')
-    } else {
-      row.getCell(2).value = ''
-    }
+    // 完了（チェック）
+    row.getCell(2).value = t.isCompleted ? '✓' : ''
     
     row.getCell(3).value = t.assignee  // 担当者列を3列目に移動
 
@@ -328,7 +324,7 @@ export async function POST(
           Math.floor((plannedEnd.getTime() - timelineStart.getTime()) / unitDurationMs)
         )
 
-        const color = getAssigneeColorWithSettings(t.assignee, !!t.completedAt, colorSettings)
+        const color = getAssigneeColorWithSettings(t.assignee, t.isCompleted, colorSettings)
         const hex = color.hex
 
         for (let idx = startOffset; idx <= endOffset; idx += 1) {

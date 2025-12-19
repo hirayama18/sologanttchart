@@ -42,7 +42,7 @@ export function TaskForm({
     assignee: '',
     plannedStart: new Date().toISOString().split('T')[0],
     plannedEnd: new Date().toISOString().split('T')[0],
-    completedAt: '',  // 空文字列は未完了を表す
+    isCompleted: false,
     parentId: 'none'  // 'none'は親なし（中項目）
   })
 
@@ -85,7 +85,7 @@ export function TaskForm({
         assignee: task.assignee,
         plannedStart: task.plannedStart ? task.plannedStart.slice(0, 10) : new Date().toISOString().split('T')[0],
         plannedEnd: task.plannedEnd ? task.plannedEnd.slice(0, 10) : new Date().toISOString().split('T')[0],
-        completedAt: task.completedAt ? task.completedAt.slice(0, 10) : '',
+        isCompleted: task.isCompleted,
         parentId: task.parentId || 'none'
       })
     } else {
@@ -96,7 +96,7 @@ export function TaskForm({
         assignee: '',
         plannedStart: new Date().toISOString().split('T')[0],
         plannedEnd: new Date().toISOString().split('T')[0],
-        completedAt: '',
+        isCompleted: false,
         parentId: 'none'
       })
     }
@@ -128,7 +128,7 @@ export function TaskForm({
           assignee: formData.assignee,
           plannedStart: isParentTask ? null : formData.plannedStart,
           plannedEnd: isParentTask ? null : formData.plannedEnd,
-          completedAt: formData.completedAt || null,
+          isCompleted: formData.isCompleted,
           parentId: isParentTask ? null : formData.parentId
         }
         
@@ -144,7 +144,7 @@ export function TaskForm({
           plannedStart: isParentTask ? null : formData.plannedStart,
           plannedEnd: isParentTask ? null : formData.plannedEnd,
           projectId,
-          completedAt: formData.completedAt || null,
+          isCompleted: formData.isCompleted,
           parentId: isParentTask ? null : formData.parentId
         }
 
@@ -159,7 +159,7 @@ export function TaskForm({
           assignee: '',
           plannedStart: new Date().toISOString().split('T')[0],
           plannedEnd: new Date().toISOString().split('T')[0],
-          completedAt: '',
+          isCompleted: false,
           parentId: 'none'
         })
         
@@ -176,7 +176,7 @@ export function TaskForm({
           plannedStart: isParentTask ? null : formData.plannedStart,
           plannedEnd: isParentTask ? null : formData.plannedEnd,
           projectId,
-          completedAt: formData.completedAt || null,
+          isCompleted: formData.isCompleted,
           parentId: isParentTask ? null : formData.parentId
         }
 
@@ -198,7 +198,7 @@ export function TaskForm({
               assignee: '',
               plannedStart: new Date().toISOString().split('T')[0],
               plannedEnd: new Date().toISOString().split('T')[0],
-              completedAt: '',
+              isCompleted: false,
               parentId: 'none'
             })
           }
@@ -216,7 +216,7 @@ export function TaskForm({
     }
   }
 
-  const handleInputChange = (field: string, value: string) => {
+  const handleInputChange = (field: string, value: string | boolean) => {
     setFormData(prev => ({
       ...prev,
       [field]: value
@@ -326,17 +326,19 @@ export function TaskForm({
             )}
             
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="completedAt" className="text-right">
-                完了日
+              <Label htmlFor="isCompleted" className="text-right">
+                完了
               </Label>
-              <Input
-                id="completedAt"
-                type="date"
-                value={formData.completedAt}
-                onChange={(e) => handleInputChange('completedAt', e.target.value)}
-                className="col-span-3"
-                placeholder="未完了の場合は空欄"
-              />
+              <div className="col-span-3 flex items-center gap-2">
+                <input
+                  id="isCompleted"
+                  type="checkbox"
+                  checked={formData.isCompleted}
+                  onChange={(e) => handleInputChange('isCompleted', e.target.checked)}
+                  className="h-4 w-4 accent-black"
+                />
+                <span className="text-sm text-gray-600">完了として扱う</span>
+              </div>
             </div>
           </div>
           <DialogFooter>

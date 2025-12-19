@@ -48,7 +48,7 @@ export function useOptimizedTaskUpdate({
       // 日付フィールドは最新の値のみを保持
       plannedStart: newUpdates.plannedStart ?? existing.plannedStart,
       plannedEnd: newUpdates.plannedEnd ?? existing.plannedEnd,
-      completedAt: newUpdates.completedAt ?? existing.completedAt,
+      isCompleted: newUpdates.isCompleted ?? existing.isCompleted,
     }
   }, [])
 
@@ -171,7 +171,6 @@ export function useOptimizedTaskUpdate({
       taskId,
       updates,
       originalData,
-      completedAtUpdate: updates.completedAt,
       useQueueSystem,
       hasPendingUpdate: pendingUpdatesRef.current.has(taskId)
     })

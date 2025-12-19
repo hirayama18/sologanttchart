@@ -41,6 +41,20 @@
   - 内容: 中項目（親なし / `parentId=null`）の作成時に担当者を自動セットしない。更新APIは空文字で担当者をクリア可能にする。
   - 仕様: 小項目（親あり）は担当者が空の場合に400を返す（運用上の誤入力防止）
 
+### 一括操作
+- [x] 🟡 プロジェクト配下タスクの日付を +n 日シフトするAPI
+  - 対象: `src/app/api/projects/[id]/shift-tasks/route.ts`, `src/dal/tasks/index.ts`
+  - 内容: プロジェクト所有者のみ、`plannedStart`/`plannedEnd` を一括で整数日シフト（deleted=true は除外）
+  - 仕様: `POST /api/projects/[id]/shift-tasks` に `{ days: number, includeCompleted?: boolean }`（daysは整数・±3650以内）を送る
+  - 注意: `includeCompleted=false` の場合のみ、`isCompleted=true`（完了済み）を除外（デフォルトは完了済みも対象）
+
+### 完了状態管理
+- [x] 🔴 完了状態をチェックボックス（boolean）で管理し、完了日を非表示にする
+  - 対象: Prismaスキーマ、タスクAPI、ガント/フォームUI、エクスポート
+  - 内容: `completedAt` 依存を廃止し `isCompleted:boolean` を正として扱う（UIはチェックボックス）
+  - DB: `tasks.isCompleted` を追加し、既存の `completedAt != null` は `isCompleted=true` に移行
+  - UI: 完了日入力は削除。エクスポートの「完了日」列は「完了（✓）」列へ変更
+
 ## 完了した機能
 - [x] 🟢 プロジェクトの初期設定
   - Next.jsプロジェクトの作成

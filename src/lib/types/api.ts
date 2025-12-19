@@ -45,7 +45,7 @@ export interface CreateTaskRequest {
   projectId: string
   parentId?: string | null
   order?: number
-  completedAt?: string | null
+  isCompleted?: boolean
 }
 
 export interface UpdateTaskRequest {
@@ -54,7 +54,7 @@ export interface UpdateTaskRequest {
   plannedStart?: string | null // YYYY-MM-DD string or ISO string
   plannedEnd?: string | null // YYYY-MM-DD string or ISO string
   order?: number
-  completedAt?: string | null
+  isCompleted?: boolean
   parentId?: string | null
 }
 
@@ -71,7 +71,7 @@ export interface TaskResponse {
   subTasks?: TaskResponse[]
   createdAt: string
   updatedAt: string
-  completedAt?: string | null
+  isCompleted: boolean
 }
 
 // Error response
