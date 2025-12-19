@@ -29,6 +29,16 @@ export async function POST(request: NextRequest) {
     }
 
     console.log('Create Task Request Body:', JSON.stringify(body))
+
+    // 中項目（parentIdなし）は担当者未設定でもOK。
+    // 小項目（parentIdあり）は担当者が空だと運用上困るため、空は弾く。
+    const isSubTask = !!body.parentId
+    if (isSubTask && (!body.assignee || body.assignee.trim() === '')) {
+      return NextResponse.json(
+        { error: 'Invalid assignee: required for sub tasks', received: body.assignee },
+        { status: 400 }
+      )
+    }
     
     const parseDate = (val: string | null | undefined): Date | null => {
       if (!val) return null;
@@ -44,7 +54,8 @@ export async function POST(request: NextRequest) {
     
     const taskData = {
       title: body.title,
-      assignee: body.assignee,
+      // 中項目（parentIdなし）は空文字も許容
+      assignee: body.assignee ?? '',
       plannedStart: parseDate(body.plannedStart),
       plannedEnd: parseDate(body.plannedEnd),
       projectId: body.projectId,

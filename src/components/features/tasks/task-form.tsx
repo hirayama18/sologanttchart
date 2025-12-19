@@ -90,10 +90,10 @@ export function TaskForm({
       })
     } else {
       // 新規作成モード: 初期値を設定
-      const defaultAssignee = assigneeOptions.length > 0 ? assigneeOptions[0].name : ''
       setFormData({
         title: '',
-        assignee: defaultAssignee,
+        // 中項目（親なし）の担当者は任意のため、初期値は空にする
+        assignee: '',
         plannedStart: new Date().toISOString().split('T')[0],
         plannedEnd: new Date().toISOString().split('T')[0],
         completedAt: '',
@@ -101,6 +101,20 @@ export function TaskForm({
       })
     }
   }, [task, assigneeOptions])
+
+  // 親タスクを選択した場合（小項目として作成/編集する場合）は、担当者が空ならデフォルトを入れる
+  useEffect(() => {
+    if (isEditMode) return
+    if (formData.parentId === 'none') return
+    if (formData.assignee !== '') return
+    if (assigneeOptions.length === 0) return
+
+    setFormData(prev => {
+      if (prev.parentId === 'none') return prev
+      if (prev.assignee !== '') return prev
+      return { ...prev, assignee: assigneeOptions[0].name }
+    })
+  }, [isEditMode, formData.parentId, formData.assignee, assigneeOptions])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -139,10 +153,10 @@ export function TaskForm({
         onOpenChange(false)
         
         // フォームをリセット
-        const defaultAssignee = assigneeOptions.length > 0 ? assigneeOptions[0].name : ''
         setFormData({
           title: '',
-          assignee: defaultAssignee,
+          // 中項目（親なし）の担当者は任意
+          assignee: '',
           plannedStart: new Date().toISOString().split('T')[0],
           plannedEnd: new Date().toISOString().split('T')[0],
           completedAt: '',
@@ -178,10 +192,10 @@ export function TaskForm({
           onOpenChange(false)
           
           if (!isEditMode) {
-            const defaultAssignee = assigneeOptions.length > 0 ? assigneeOptions[0].name : ''
             setFormData({
               title: '',
-              assignee: defaultAssignee,
+              // 中項目（親なし）の担当者は任意
+              assignee: '',
               plannedStart: new Date().toISOString().split('T')[0],
               plannedEnd: new Date().toISOString().split('T')[0],
               completedAt: '',

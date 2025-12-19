@@ -35,6 +35,12 @@
   - APIエンドポイントの実装
   - データのCRUD操作
 
+### タスク仕様調整
+- [x] 🟢 中項目タスクは担当者未設定を許可
+  - 対象: `src/components/features/tasks/task-form.tsx`, `src/app/api/tasks/route.ts`, `src/app/api/tasks/[id]/route.ts`
+  - 内容: 中項目（親なし / `parentId=null`）の作成時に担当者を自動セットしない。更新APIは空文字で担当者をクリア可能にする。
+  - 仕様: 小項目（親あり）は担当者が空の場合に400を返す（運用上の誤入力防止）
+
 ## 完了した機能
 - [x] 🟢 プロジェクトの初期設定
   - Next.jsプロジェクトの作成

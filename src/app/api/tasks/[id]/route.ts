@@ -100,7 +100,16 @@ export async function PATCH(
     }> = {}
     
     if (body.title) updateData.title = body.title
-    if (body.assignee) updateData.assignee = body.assignee
+    // 空文字でのクリアも許可するため、undefined判定にする
+    if (body.assignee !== undefined) {
+      if (body.assignee !== null && typeof body.assignee !== 'string') {
+        return NextResponse.json(
+          { error: 'Invalid assignee', received: body.assignee },
+          { status: 400 }
+        )
+      }
+      updateData.assignee = (body.assignee ?? '') as string
+    }
     if (body.parentId !== undefined) updateData.parentId = body.parentId
     if (body.plannedStart !== undefined) {
       if (body.plannedStart === null) {
