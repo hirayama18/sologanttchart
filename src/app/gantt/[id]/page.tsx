@@ -7,8 +7,9 @@ import { GanttChart } from '@/components/features/gantt/gantt-chart'
 import { TaskForm } from '@/components/features/tasks/task-form'
 import { AssigneeSettingsDialog } from '@/components/features/projects/assignee-settings-dialog'
 import { SaveButton } from '@/components/features/gantt/save-button'
+import { ShiftTasksDialog } from '@/components/features/gantt/shift-tasks-dialog'
 import { Button } from '@/components/ui/button'
-import { ArrowLeft, BarChart3, Plus, Download, Calendar as CalendarIcon, Check } from 'lucide-react'
+import { ArrowLeft, BarChart3, Plus, Download, Calendar as CalendarIcon, Check, ArrowRightLeft } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
@@ -32,6 +33,7 @@ export default function GanttPage() {
   })
   const [viewScale, setViewScale] = usePersistentViewScale(projectId)
   const [exporting, setExporting] = useState(false)
+  const [shiftDialogOpen, setShiftDialogOpen] = useState(false)
   const viewScaleLabel = viewScale === 'DAY' ? '日' : '週'
 
   // 変更追跡システム
@@ -316,6 +318,14 @@ export default function GanttPage() {
                 <Plus className="h-4 w-4 mr-2" />
                 新しいタスク
               </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setShiftDialogOpen(true)}
+              >
+                <ArrowRightLeft className="h-4 w-4 mr-2" />
+                日付をシフト
+              </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
@@ -447,6 +457,17 @@ export default function GanttPage() {
         tasks={localTasks}
         onLocalTaskAdd={handleLocalTaskAdd}
         onLocalTaskUpdate={handleLocalTaskUpdate}
+      />
+
+      {/* タスク日付シフトダイアログ */}
+      <ShiftTasksDialog
+        open={shiftDialogOpen}
+        onOpenChange={setShiftDialogOpen}
+        projectId={projectId}
+        onSuccess={() => {
+          // シフト成功後、プロジェクトデータを再取得
+          fetchProject()
+        }}
       />
     </div>
   )

@@ -7,3 +7,5 @@ UPDATE "tasks"
 SET "isCompleted" = true
 WHERE "completedAt" IS NOT NULL;
 
+
+
