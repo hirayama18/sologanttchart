@@ -158,9 +158,10 @@ interface GanttChartProps {
   onTaskDelete?: (task: TaskResponse) => Promise<boolean>
   onTaskReorder?: (newOrderIds: string[]) => void
   viewScale?: 'DAY' | 'WEEK'
+  headerActions?: React.ReactNode
 }
 
-export function GanttChart({ project, tasks, onEditTask, onTaskUpdate, onTaskDuplicate, onTaskDelete, onTaskReorder, viewScale }: GanttChartProps) {
+export function GanttChart({ project, tasks, onEditTask, onTaskUpdate, onTaskDuplicate, onTaskDelete, onTaskReorder, viewScale, headerActions }: GanttChartProps) {
   // 色設定の状態管理
   const [colorSettings, setColorSettings] = React.useState<Record<string, number>>({})
   
@@ -451,12 +452,13 @@ export function GanttChart({ project, tasks, onEditTask, onTaskUpdate, onTaskDup
   return (
     <div className="bg-white border rounded-lg overflow-hidden">
       {/* 色凡例 */}
-      <div className="p-4 border-b">
+      <div className="p-3 border-b">
         <ColorLegend 
           tasks={tasks} 
           projectId={project.id}
           colorSettings={colorSettings}
           onColorSettingsChange={setColorSettings}
+          variant="embedded"
         />
       </div>
       
@@ -469,10 +471,13 @@ export function GanttChart({ project, tasks, onEditTask, onTaskUpdate, onTaskDup
             </p>
             <p className="text-xs text-gray-500 mt-1">💡 Enterキーでタスクを追加できます</p>
           </div>
-          {/* 今日のマーカー説明 */}
-          <div className="flex items-center gap-2 text-sm">
-            <div className="w-0.5 h-4 bg-red-500" aria-hidden />
-            <span>今日</span>
+          <div className="flex flex-wrap items-center justify-end gap-3">
+            {headerActions}
+            {/* 今日のマーカー説明 */}
+            <div className="flex items-center gap-2 text-sm">
+              <div className="w-0.5 h-4 bg-red-500" aria-hidden />
+              <span>今日</span>
+            </div>
           </div>
         </div>
       </div>

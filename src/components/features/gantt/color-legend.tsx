@@ -13,9 +13,10 @@ interface ColorLegendProps {
   projectId: string
   colorSettings?: Record<string, number>
   onColorSettingsChange?: (settings: Record<string, number>) => void
+  variant?: 'card' | 'embedded'
 }
 
-export function ColorLegend({ tasks, projectId, colorSettings = {}, onColorSettingsChange }: ColorLegendProps) {
+export function ColorLegend({ tasks, projectId, colorSettings = {}, onColorSettingsChange, variant = 'card' }: ColorLegendProps) {
   // プロジェクト内で使用されている担当者を抽出
   const assignees = useMemo(() => {
     const uniqueAssignees = new Set(tasks.map(task => task.assignee))
@@ -112,78 +113,99 @@ export function ColorLegend({ tasks, projectId, colorSettings = {}, onColorSetti
     return null
   }
 
-  return (
-    <Card className="mb-4">
-      <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-sm font-medium flex items-center gap-2">
-            <Palette className="h-4 w-4" />
-            色分け凡例
-          </CardTitle>
-          {Object.keys(colorSettings).length > 0 && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleResetAll}
-              disabled={isUpdating}
-              className="text-xs"
-            >
-              <RotateCcw className="h-3 w-3 mr-1" />
-              全リセット
-            </Button>
-          )}
+  const header = (
+    <div className="flex items-center justify-between">
+      {variant === 'card' ? (
+        <CardTitle className="text-sm font-medium flex items-center gap-2">
+          <Palette className="h-4 w-4" />
+          色分け凡例
+        </CardTitle>
+      ) : (
+        <div className="text-sm font-medium flex items-center gap-2">
+          <Palette className="h-4 w-4" />
+          色分け凡例
         </div>
-      </CardHeader>
-      <CardContent className="pt-0">
-        <div className="flex flex-wrap gap-3">
-          {/* 担当者ごとの色（編集可能） */}
-          {assignees.map((assignee) => {
-            const color = colorMapping[assignee]
-            const currentColorIndex = colorSettings[assignee]
-            
-            return (
-              <div key={assignee} className="flex items-center gap-2">
-                <div className="relative">
-                  <div 
-                    className="w-4 h-4 rounded border border-gray-300"
-                    style={{ backgroundColor: `#${color.hex}` }}
-                    title={color.name}
+      )}
+      {Object.keys(colorSettings).length > 0 && (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={handleResetAll}
+          disabled={isUpdating}
+          className="text-xs"
+        >
+          <RotateCcw className="h-3 w-3 mr-1" />
+          全リセット
+        </Button>
+      )}
+    </div>
+  )
+
+  const content = (
+    <>
+      <div className="flex flex-wrap gap-3">
+        {/* 担当者ごとの色（編集可能） */}
+        {assignees.map((assignee) => {
+          const color = colorMapping[assignee]
+          const currentColorIndex = colorSettings[assignee]
+
+          return (
+            <div key={assignee} className="flex items-center gap-2">
+              <div className="relative">
+                <div
+                  className="w-4 h-4 rounded border border-gray-300"
+                  style={{ backgroundColor: `#${color.hex}` }}
+                  title={color.name}
+                />
+                <div className="absolute -top-1 -right-1">
+                  <ColorPickerDialog
+                    assignee={assignee}
+                    currentColorIndex={currentColorIndex}
+                    onColorSelect={handleColorSelect}
+                    onColorReset={handleColorReset}
+                    disabled={isUpdating}
                   />
-                  <div className="absolute -top-1 -right-1">
-                    <ColorPickerDialog
-                      assignee={assignee}
-                      currentColorIndex={currentColorIndex}
-                      onColorSelect={handleColorSelect}
-                      onColorReset={handleColorReset}
-                      disabled={isUpdating}
-                    />
-                  </div>
                 </div>
-                <span className="text-sm text-gray-700">{assignee}</span>
-                {currentColorIndex !== undefined && (
-                  <span className="text-xs text-blue-600">(カスタム)</span>
-                )}
               </div>
-            )
-          })}
-          
-          {/* 完了済みタスクの色（編集不可） */}
-          <div className="flex items-center gap-2">
-            <div 
-              className={`w-4 h-4 rounded ${COMPLETED_COLOR.tailwind} border border-gray-300`}
-              title={COMPLETED_COLOR.name}
-            />
-            <span className="text-sm text-gray-700">完了済み</span>
-          </div>
+              <span className="text-sm text-gray-700">{assignee}</span>
+              {currentColorIndex !== undefined && (
+                <span className="text-xs text-blue-600">(カスタム)</span>
+              )}
+            </div>
+          )
+        })}
+
+        {/* 完了済みタスクの色（編集不可） */}
+        <div className="flex items-center gap-2">
+          <div
+            className={`w-4 h-4 rounded ${COMPLETED_COLOR.tailwind} border border-gray-300`}
+            title={COMPLETED_COLOR.name}
+          />
+          <span className="text-sm text-gray-700">完了済み</span>
         </div>
-        
-        <p className="text-xs text-gray-500 mt-2">
-          {onColorSettingsChange 
-            ? '💡 色をクリックして担当者ごとの表示色をカスタマイズできます'
-            : '※ 担当者ごとに自動的に色が割り当てられます'
-          }
-        </p>
-      </CardContent>
+      </div>
+
+      <p className="text-xs text-gray-500 mt-2">
+        {onColorSettingsChange
+          ? '💡 色をクリックして担当者ごとの表示色をカスタマイズできます'
+          : '※ 担当者ごとに自動的に色が割り当てられます'}
+      </p>
+    </>
+  )
+
+  if (variant === 'embedded') {
+    return (
+      <div>
+        {header}
+        <div className="mt-2">{content}</div>
+      </div>
+    )
+  }
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">{header}</CardHeader>
+      <CardContent className="pt-0">{content}</CardContent>
     </Card>
   )
 }

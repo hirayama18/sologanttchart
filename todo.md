@@ -105,6 +105,10 @@
   - 対象: `src/hooks/useChangeTracker.ts`, `src/app/gantt/[id]/page.tsx`
   - 内容: 手動保存方式のローカル変更に対し、undo/redo の履歴を保持。キーボード（Cmd+Z/Cmd+Y/Cmd+Shift+Z）とボタンで操作可能にする
   - 注意: テキスト入力中はブラウザ標準のUndo/Redoを優先（入力欄では横取りしない）
+- [x] 🟡 ガント画面のヘッダーUI整理（操作群の分割）
+  - 対象: `src/app/gantt/[id]/page.tsx`, `src/components/features/gantt/gantt-chart.tsx`, `src/components/features/gantt/color-legend.tsx`
+  - 内容: 画面最上部は主要操作（Undo/Redo・保存・新規）に集約し、補助操作（ビュー/エクスポート/シフト/設定/期間編集）はガントヘッダー右側の空きスペースへ移動。色凡例は埋め込み表示にして余白を削減。
+  - 注意: 機能は維持し、配置のみを変更
 - [x] 🔴 一括保存のトランザクション安定化（Transaction not found 対策）
   - 対象: `src/app/api/projects/[id]/batch-save/route.ts`
   - 内容: interactive transaction の `timeout/maxWait` を延長し、多数更新時にトランザクションが途中で閉じて保存失敗しないように修正

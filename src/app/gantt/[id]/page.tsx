@@ -322,8 +322,8 @@ export default function GanttPage() {
       {/* ヘッダー */}
       <header className="bg-white border-b">
         <div className="w-full px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex items-start space-x-4">
               <Button
                 variant="ghost"
                 size="sm"
@@ -341,13 +341,13 @@ export default function GanttPage() {
               </Button>
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">{project.title}</h1>
-                <p className="text-gray-600">ガントチャート</p>
+                <div className="mt-1 text-sm text-gray-500">
+                  総タスク数: {localTasks.length}件
+                </div>
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2 justify-end">
-              <div className="text-sm text-gray-500 mr-2">総タスク数: {localTasks.length}件</div>
-              
-              {/* 保存ボタン */}
+              {/* Undo/Redo + 主要操作 */}
               <div className="flex items-center gap-2">
                 <Button
                   size="sm"
@@ -371,84 +371,16 @@ export default function GanttPage() {
                 </Button>
               </div>
 
-              <SaveButton 
+              <SaveButton
                 hasChanges={hasChanges}
                 changeCount={changeCount}
                 onSave={handleSave}
               />
-              
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-500">ビュー</span>
-                <Select value={viewScale} onValueChange={(value) => setViewScale(value as 'DAY' | 'WEEK')}>
-                  <SelectTrigger className="w-[120px]">
-                    <SelectValue placeholder="表示単位を選択" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="DAY">日表示</SelectItem>
-                    <SelectItem value="WEEK">週表示</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <AssigneeSettingsDialog 
-                projectId={projectId}
-                onOptionsUpdate={() => {
-                  // 担当者設定が変更されたらタスクフォームを再読み込み
-                }}
-              />
-              <Button
-                size="sm"
-                variant={editingProject ? 'default' : 'outline'}
-                onClick={() => setEditingProject((v) => !v)}
-              >
-                <CalendarIcon className="h-4 w-4 mr-2" />
-                {editingProject ? '編集中' : 'プロジェクト名・期間を編集'}
-              </Button>
+
               <Button size="sm" onClick={openCreateForm}>
                 <Plus className="h-4 w-4 mr-2" />
                 新しいタスク
               </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setShiftDialogOpen(true)}
-              >
-                <ArrowRightLeft className="h-4 w-4 mr-2" />
-                日付をシフト
-              </Button>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={exporting}
-                  >
-                    <Download className="h-4 w-4 mr-2" />
-                    {exporting ? 'エクスポート中...' : 'エクスポート'}
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56">
-                  <DropdownMenuLabel>エクスポートの単位</DropdownMenuLabel>
-                  <DropdownMenuItem onClick={() => handleExport(viewScale)}>
-                    <div className="flex w-full items-center justify-between">
-                      <span>現在のビュー（{viewScaleLabel}）</span>
-                      <Check className="h-4 w-4 text-blue-600" />
-                    </div>
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => handleExport('DAY')}>
-                    <div className="flex w-full items-center justify-between">
-                      <span>日単位でエクスポート</span>
-                      {viewScale === 'DAY' && <Check className="h-4 w-4 text-muted-foreground" />}
-                    </div>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleExport('WEEK')}>
-                    <div className="flex w-full items-center justify-between">
-                      <span>週単位でエクスポート</span>
-                      {viewScale === 'WEEK' && <Check className="h-4 w-4 text-muted-foreground" />}
-                    </div>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
             </div>
           </div>
         </div>
@@ -516,6 +448,82 @@ export default function GanttPage() {
             project={project}
             tasks={localTasks}
             viewScale={viewScale}
+            headerActions={
+              <>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-500">ビュー</span>
+                  <Select value={viewScale} onValueChange={(value) => setViewScale(value as 'DAY' | 'WEEK')}>
+                    <SelectTrigger className="w-[120px]">
+                      <SelectValue placeholder="表示単位を選択" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="DAY">日表示</SelectItem>
+                      <SelectItem value="WEEK">週表示</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <AssigneeSettingsDialog
+                  projectId={projectId}
+                  onOptionsUpdate={() => {
+                    // 担当者設定が変更されたらタスクフォームを再読み込み
+                  }}
+                />
+
+                <Button
+                  size="sm"
+                  variant={editingProject ? 'default' : 'outline'}
+                  onClick={() => setEditingProject((v) => !v)}
+                >
+                  <CalendarIcon className="h-4 w-4 mr-2" />
+                  {editingProject ? '編集中' : 'プロジェクト名・期間を編集'}
+                </Button>
+
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setShiftDialogOpen(true)}
+                >
+                  <ArrowRightLeft className="h-4 w-4 mr-2" />
+                  日付をシフト
+                </Button>
+
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={exporting}
+                    >
+                      <Download className="h-4 w-4 mr-2" />
+                      {exporting ? 'エクスポート中...' : 'エクスポート'}
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-56">
+                    <DropdownMenuLabel>エクスポートの単位</DropdownMenuLabel>
+                    <DropdownMenuItem onClick={() => handleExport(viewScale)}>
+                      <div className="flex w-full items-center justify-between">
+                        <span>現在のビュー（{viewScaleLabel}）</span>
+                        <Check className="h-4 w-4 text-blue-600" />
+                      </div>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => handleExport('DAY')}>
+                      <div className="flex w-full items-center justify-between">
+                        <span>日単位でエクスポート</span>
+                        {viewScale === 'DAY' && <Check className="h-4 w-4 text-muted-foreground" />}
+                      </div>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleExport('WEEK')}>
+                      <div className="flex w-full items-center justify-between">
+                        <span>週単位でエクスポート</span>
+                        {viewScale === 'WEEK' && <Check className="h-4 w-4 text-muted-foreground" />}
+                      </div>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </>
+            }
             onTaskUpdate={handleLocalTaskUpdate}
             onTaskDuplicate={handleLocalTaskDuplicate}
             onTaskDelete={handleLocalTaskDelete}
