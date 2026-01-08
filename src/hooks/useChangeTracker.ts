@@ -1,4 +1,4 @@
-import { useCallback, useState, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { TaskResponse, CreateTaskRequest, UpdateTaskRequest } from '@/lib/types/api'
 
 // 変更の種類を管理する型
@@ -7,6 +7,20 @@ export interface ChangeSet {
   updated: Map<string, UpdateTaskRequest>        // 更新（実際のtaskId -> 変更差分）
   deleted: Set<string>                           // 削除予定のタスクID（実際のtaskIdのみ）
 }
+
+type ChangeSetSnapshot = {
+  createdEntries: Array<[string, CreateTaskRequest]>
+  updatedEntries: Array<[string, UpdateTaskRequest]>
+  deletedIds: string[]
+}
+
+type TrackerSnapshot = {
+  localTasks: TaskResponse[]
+  changeSet: ChangeSetSnapshot
+  originalOrder: string[]
+}
+
+const MAX_HISTORY = 100
 
 // 仮IDのプレフィックス
 const TEMP_ID_PREFIX = 'local-'
@@ -41,6 +55,12 @@ interface UseChangeTrackerReturn {
   
   // 変更件数
   changeCount: number
+
+  // Undo/Redo
+  canUndo: boolean
+  canRedo: boolean
+  undo: () => boolean
+  redo: () => boolean
   
   // タスク操作（ローカルステートのみ更新）
   addTask: (taskData: CreateTaskRequest) => TaskResponse
@@ -81,6 +101,103 @@ export function useChangeTracker({ initialTasks }: UseChangeTrackerProps): UseCh
   
   // 元のタスク順序（並び替え検出用）
   const [originalOrder, setOriginalOrder] = useState<string[]>(initialTasks.map(t => t.id))
+
+  // --- Undo/Redo（未保存変更の履歴）---
+  const [historyPast, setHistoryPast] = useState<TrackerSnapshot[]>([])
+  const [historyFuture, setHistoryFuture] = useState<TrackerSnapshot[]>([])
+
+  // 最新 state を参照するための ref（履歴スナップショットの一貫性確保）
+  const localTasksRef = useRef(localTasks)
+  const changeSetRef = useRef(changeSet)
+  const originalOrderRef = useRef(originalOrder)
+
+  useEffect(() => {
+    localTasksRef.current = localTasks
+  }, [localTasks])
+
+  useEffect(() => {
+    changeSetRef.current = changeSet
+  }, [changeSet])
+
+  useEffect(() => {
+    originalOrderRef.current = originalOrder
+  }, [originalOrder])
+
+  const makeSnapshot = useCallback((): TrackerSnapshot => {
+    const tasks = localTasksRef.current.map(t => ({ ...t }))
+    const cs = changeSetRef.current
+    return {
+      localTasks: tasks,
+      changeSet: {
+        createdEntries: Array.from(cs.created.entries()).map(([k, v]) => [k, { ...v }]),
+        updatedEntries: Array.from(cs.updated.entries()).map(([k, v]) => [k, { ...v }]),
+        deletedIds: Array.from(cs.deleted)
+      },
+      originalOrder: [...originalOrderRef.current]
+    }
+  }, [])
+
+  const applySnapshot = useCallback((snapshot: TrackerSnapshot) => {
+    // refs も先に更新しておく（連打時に makeSnapshot が古い値を読まないように）
+    localTasksRef.current = snapshot.localTasks.map(t => ({ ...t }))
+    changeSetRef.current = {
+      created: new Map(snapshot.changeSet.createdEntries.map(([k, v]) => [k, { ...v }])),
+      updated: new Map(snapshot.changeSet.updatedEntries.map(([k, v]) => [k, { ...v }])),
+      deleted: new Set(snapshot.changeSet.deletedIds)
+    }
+    originalOrderRef.current = [...snapshot.originalOrder]
+
+    setLocalTasks(snapshot.localTasks.map(t => ({ ...t })))
+    setChangeSet({
+      created: new Map(snapshot.changeSet.createdEntries.map(([k, v]) => [k, { ...v }])),
+      updated: new Map(snapshot.changeSet.updatedEntries.map(([k, v]) => [k, { ...v }])),
+      deleted: new Set(snapshot.changeSet.deletedIds)
+    })
+    setOriginalOrder([...snapshot.originalOrder])
+  }, [])
+
+  const pushHistory = useCallback(() => {
+    setHistoryPast(prev => {
+      const next = [...prev, makeSnapshot()]
+      if (next.length <= MAX_HISTORY) return next
+      return next.slice(next.length - MAX_HISTORY)
+    })
+    setHistoryFuture([])
+  }, [makeSnapshot])
+
+  const clearHistory = useCallback(() => {
+    setHistoryPast([])
+    setHistoryFuture([])
+  }, [])
+
+  const undo = useCallback((): boolean => {
+    const past = historyPast
+    if (past.length === 0) return false
+
+    const current = makeSnapshot()
+    const previous = past[past.length - 1]
+
+    setHistoryPast(past.slice(0, -1))
+    setHistoryFuture(prev => [...prev, current])
+    applySnapshot(previous)
+    return true
+  }, [applySnapshot, historyPast, makeSnapshot])
+
+  const redo = useCallback((): boolean => {
+    const future = historyFuture
+    if (future.length === 0) return false
+
+    const current = makeSnapshot()
+    const next = future[future.length - 1]
+
+    setHistoryFuture(future.slice(0, -1))
+    setHistoryPast(prev => [...prev, current])
+    applySnapshot(next)
+    return true
+  }, [applySnapshot, historyFuture, makeSnapshot])
+
+  const canUndo = historyPast.length > 0
+  const canRedo = historyFuture.length > 0
   
   // 変更があるかどうか
   const hasChanges = useMemo(() => {
@@ -107,6 +224,7 @@ export function useChangeTracker({ initialTasks }: UseChangeTrackerProps): UseCh
   
   // タスク追加
   const addTask = useCallback((taskData: CreateTaskRequest): TaskResponse => {
+    pushHistory()
     const tempId = generateTempId()
     
     // ISO形式に変換するヘルパー
@@ -148,10 +266,11 @@ export function useChangeTracker({ initialTasks }: UseChangeTrackerProps): UseCh
     })
     
     return newTask
-  }, [])
+  }, [pushHistory])
   
   // タスク更新
   const updateTask = useCallback((taskId: string, updates: Partial<TaskResponse>) => {
+    pushHistory()
     // ローカルタスクを更新
     setLocalTasks(prev => prev.map(task => 
       task.id === taskId ? { ...task, ...updates, updatedAt: new Date().toISOString() } : task
@@ -175,10 +294,11 @@ export function useChangeTracker({ initialTasks }: UseChangeTrackerProps): UseCh
         return { ...prev, updated: newUpdated }
       }
     })
-  }, [])
+  }, [pushHistory])
   
   // タスク削除
   const deleteTask = useCallback((taskId: string) => {
+    pushHistory()
     // ローカルタスクから削除
     setLocalTasks(prev => prev.filter(task => task.id !== taskId))
     
@@ -198,10 +318,11 @@ export function useChangeTracker({ initialTasks }: UseChangeTrackerProps): UseCh
         return { ...prev, deleted: newDeleted, updated: newUpdated }
       }
     })
-  }, [])
+  }, [pushHistory])
   
   // タスク並び替え
   const reorderTasks = useCallback((newOrderIds: string[]) => {
+    pushHistory()
     setLocalTasks(prev => {
       const taskMap = new Map(prev.map(task => [task.id, task]))
       return newOrderIds
@@ -209,7 +330,7 @@ export function useChangeTracker({ initialTasks }: UseChangeTrackerProps): UseCh
         .filter((task): task is TaskResponse => task !== undefined)
         .map((task, index) => ({ ...task, order: index + 1 }))
     })
-  }, [])
+  }, [pushHistory])
   
   // サーバーデータでリセット
   const resetWithServerData = useCallback((tasks: TaskResponse[]) => {
@@ -220,7 +341,8 @@ export function useChangeTracker({ initialTasks }: UseChangeTrackerProps): UseCh
       updated: new Map(),
       deleted: new Set()
     })
-  }, [])
+    clearHistory()
+  }, [clearHistory])
   
   // 変更をクリア
   const clearChanges = useCallback(() => {
@@ -230,7 +352,8 @@ export function useChangeTracker({ initialTasks }: UseChangeTrackerProps): UseCh
       updated: new Map(),
       deleted: new Set()
     })
-  }, [localTasks])
+    clearHistory()
+  }, [clearHistory, localTasks])
   
   // 保存用データを取得
   const getChangesForSave = useCallback(() => {
@@ -268,6 +391,10 @@ export function useChangeTracker({ initialTasks }: UseChangeTrackerProps): UseCh
     changeSet,
     hasChanges,
     changeCount,
+    canUndo,
+    canRedo,
+    undo,
+    redo,
     addTask,
     updateTask,
     deleteTask,

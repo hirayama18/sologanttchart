@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { ProjectWithTasksResponse, TaskResponse, CreateTaskRequest } from '@/lib/types/api'
 import { GanttChart } from '@/components/features/gantt/gantt-chart'
@@ -9,7 +9,7 @@ import { AssigneeSettingsDialog } from '@/components/features/projects/assignee-
 import { SaveButton } from '@/components/features/gantt/save-button'
 import { ShiftTasksDialog } from '@/components/features/gantt/shift-tasks-dialog'
 import { Button } from '@/components/ui/button'
-import { ArrowLeft, BarChart3, Plus, Download, Calendar as CalendarIcon, Check, ArrowRightLeft } from 'lucide-react'
+import { ArrowLeft, BarChart3, Plus, Download, Calendar as CalendarIcon, Check, ArrowRightLeft, RotateCcw, RotateCw } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
@@ -20,6 +20,7 @@ export default function GanttPage() {
   const params = useParams()
   const router = useRouter()
   const projectId = params.id as string
+  const currentUrlRef = useRef<string | null>(null)
   
   const [project, setProject] = useState<ProjectWithTasksResponse | null>(null)
   const [loading, setLoading] = useState(true)
@@ -41,6 +42,10 @@ export default function GanttPage() {
     localTasks,
     hasChanges,
     changeCount,
+    canUndo,
+    canRedo,
+    undo,
+    redo,
     addTask,
     updateTask,
     deleteTask,
@@ -104,6 +109,67 @@ export default function GanttPage() {
     window.addEventListener('beforeunload', handleBeforeUnload)
     return () => window.removeEventListener('beforeunload', handleBeforeUnload)
   }, [hasChanges])
+
+  // ブラウザ戻る/進む（popstate）対策：未保存の変更がある場合は確認し、キャンセル時はURLを元に戻す
+  useEffect(() => {
+    // 初回マウント時に「このページのURL」を保持
+    if (!currentUrlRef.current) {
+      currentUrlRef.current = window.location.href
+    }
+
+    const handlePopState = () => {
+      if (!hasChanges) {
+        // 変更がない場合は、そのまま遷移を許可しつつ参照URLを更新
+        currentUrlRef.current = window.location.href
+        return
+      }
+
+      const ok = confirm('保存されていない変更があります。ページを離れますか？')
+      if (ok) return
+
+      // キャンセル：直前のURLに戻す（pushState は popstate を再発火しない）
+      const restoreUrl = currentUrlRef.current
+      if (restoreUrl) {
+        history.pushState(null, '', restoreUrl)
+      }
+    }
+
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [hasChanges])
+
+  // Cmd+Z / Cmd+Y（+ Cmd+Shift+Z）で未保存変更の undo/redo
+  useEffect(() => {
+    const isEditableTarget = (target: EventTarget | null): boolean => {
+      if (!(target instanceof HTMLElement)) return false
+      if (target.isContentEditable) return true
+      const tag = target.tagName
+      return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // 入力中はブラウザ/OSの標準Undoに任せる
+      if (isEditableTarget(event.target)) return
+
+      const metaOrCtrl = event.metaKey || event.ctrlKey
+      if (!metaOrCtrl) return
+
+      const key = event.key.toLowerCase()
+      const isUndo = key === 'z' && !event.shiftKey
+      const isRedo = key === 'y' || (key === 'z' && event.shiftKey)
+
+      if (isUndo) {
+        const ok = undo()
+        if (ok) event.preventDefault()
+      } else if (isRedo) {
+        const ok = redo()
+        if (ok) event.preventDefault()
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [redo, undo])
 
   // Enterキーでタスク作成フォームを開く
   useEffect(() => {
@@ -282,6 +348,29 @@ export default function GanttPage() {
               <div className="text-sm text-gray-500 mr-2">総タスク数: {localTasks.length}件</div>
               
               {/* 保存ボタン */}
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => undo()}
+                  disabled={!canUndo}
+                  aria-label="元に戻す"
+                  title="元に戻す（Cmd+Z）"
+                >
+                  <RotateCcw className="h-4 w-4" />
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => redo()}
+                  disabled={!canRedo}
+                  aria-label="やり直す"
+                  title="やり直す（Cmd+Y / Cmd+Shift+Z）"
+                >
+                  <RotateCw className="h-4 w-4" />
+                </Button>
+              </div>
+
               <SaveButton 
                 hasChanges={hasChanges}
                 changeCount={changeCount}
