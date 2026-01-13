@@ -1,6 +1,9 @@
 "use client"
 
+import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useEffect, useState } from 'react'
+import { Button } from '@/components/ui/button'
 import {
   SignInButton,
   SignUpButton,
@@ -11,7 +14,30 @@ import {
 
 export function ConditionalHeader() {
   const pathname = usePathname()
-  
+  const [planLabel, setPlanLabel] = useState<string | null>(null)
+  const [isPro, setIsPro] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    const run = async () => {
+      try {
+        const res = await fetch('/api/billing/status', { method: 'POST' })
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok) return
+        if (cancelled) return
+        const pro = data?.isPro === true
+        setIsPro(pro)
+        setPlanLabel(pro ? 'Pro' : 'Free')
+      } catch {
+        // noop
+      }
+    }
+    run()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   // ランディングページの場合はヘッダーを表示しない
   if (pathname === '/') {
     return null
@@ -28,6 +54,20 @@ export function ConditionalHeader() {
         </SignUpButton>
       </SignedOut>
       <SignedIn>
+        {planLabel && (
+          <div className="flex items-center gap-2">
+            <div className="text-xs text-gray-500">
+              プラン: <span className="font-medium text-gray-700">{planLabel}</span>
+            </div>
+            {isPro === false && (
+              <Link href="/pricing">
+                <Button size="sm" variant="outline">
+                  Proにする
+                </Button>
+              </Link>
+            )}
+          </div>
+        )}
         <UserButton />
       </SignedIn>
     </header>

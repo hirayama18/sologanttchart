@@ -41,6 +41,12 @@
   - DB: 課金状態テーブル追加（ユーザーID / customerId / paymentIntentId / status / purchasedAt）
   - API: Checkoutセッション作成（Promotion Code対応）、Webhook署名検証、Billing Portal（購入情報確認）
   - 注意: WebhookはClerk認証の対象外（public route）
+- [~] 🟢 ログインユーザーのプラン表示（Free / Pro）
+  - 対象: `src/components/layouts/conditional-header.tsx`, `src/app/api/billing/status/route.ts`
+  - 内容: ヘッダーに現在プランを表示し、購入済みかどうかを画面上で判別できるようにする
+- [~] 🟢 /pricing の購入導線をモダンに改善
+  - 対象: `src/app/pricing/pricing-client.tsx`, `src/components/layouts/conditional-header.tsx`
+  - 内容: 現在プランの見える化、Proメリットの提示、Freeユーザーに「Proにする」導線を追加
 - [~] 🟡 無料プラン制限（タスク5件まで / エクスポートは無料）
   - 対象: `src/app/api/projects/[id]/batch-save/route.ts`, `src/app/api/tasks/route.ts`, `src/app/api/projects/[id]/copy/route.ts`, `src/app/api/tasks/[id]/duplicate/route.ts`
   - 仕様: 無料ユーザーは「プロジェクト内のタスク数が5件を超える新規作成」を403で拒否（削除→作成の同時保存は差分で判定）
