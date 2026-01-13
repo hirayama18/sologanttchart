@@ -35,6 +35,19 @@
   - APIエンドポイントの実装
   - データのCRUD操作
 
+### 課金（Stripe）
+- [~] 🟡 Stripe買い切り導入（Checkout + Webhook + Billing Portal）
+  - 依存追加: `stripe`
+  - DB: 課金状態テーブル追加（ユーザーID / customerId / paymentIntentId / status / purchasedAt）
+  - API: Checkoutセッション作成（Promotion Code対応）、Webhook署名検証、Billing Portal（購入情報確認）
+  - 注意: WebhookはClerk認証の対象外（public route）
+- [~] 🟡 無料プラン制限（タスク5件まで / エクスポートは無料）
+  - 対象: `src/app/api/projects/[id]/batch-save/route.ts`, `src/app/api/tasks/route.ts`, `src/app/api/projects/[id]/copy/route.ts`, `src/app/api/tasks/[id]/duplicate/route.ts`
+  - 仕様: 無料ユーザーは「プロジェクト内のタスク数が5件を超える新規作成」を403で拒否（削除→作成の同時保存は差分で判定）
+  - 例外: エクスポート（`/api/projects/[id]/export`）は無料のまま
+- [~] 🟢 Pricingページ（最小）と上限到達時の誘導
+  - 既存UIの見た目を大きく変えず、`/pricing` を追加してアップグレード導線を提供
+
 ### タスク仕様調整
 - [x] 🟢 中項目タスクは担当者未設定を許可
   - 対象: `src/components/features/tasks/task-form.tsx`, `src/app/api/tasks/route.ts`, `src/app/api/tasks/[id]/route.ts`

@@ -18,6 +18,21 @@ interface BatchSaveResponse {
   reorderedCount: number
 }
 
+type TaskLimitReachedError = Error & {
+  code: 'TASK_LIMIT_REACHED'
+  limit: number
+  current: number
+}
+
+function isTaskLimitReachedError(error: unknown): error is TaskLimitReachedError {
+  if (!(error instanceof Error)) return false
+  const maybe = error as Partial<TaskLimitReachedError>
+  return (
+    maybe.code === 'TASK_LIMIT_REACHED' ||
+    error.message === 'TASK_LIMIT_REACHED'
+  )
+}
+
 /**
  * タスクの一括保存API
  * - 新規作成、更新、削除、並び替えをトランザクションで一括処理
@@ -86,6 +101,28 @@ export async function POST(
           },
           data: { deleted: true }
         })
+      }
+
+      // 無料プラン制限: タスクはプロジェクト内で5件まで
+      // - 削除→作成が同一リクエスト内にある場合は、削除後の件数で判定する
+      // - created はローカルの仮IDも含むため、DB側の件数に created.length を加算する
+      const FREE_TASK_LIMIT = 5
+      const { SubscriptionDAL } = await import('@/dal/subscriptions')
+      const isPro = await SubscriptionDAL.isProUser(userId)
+      if (!isPro) {
+        const currentAfterDeletes = await tx.task.count({
+          where: { projectId, deleted: false },
+        })
+        const incomingCreates = created?.length ?? 0
+        if (incomingCreates > 0 && currentAfterDeletes + incomingCreates > FREE_TASK_LIMIT) {
+          // throw して transaction を中断し、ハンドリングで403を返す
+          const err: TaskLimitReachedError = Object.assign(new Error('TASK_LIMIT_REACHED'), {
+            code: 'TASK_LIMIT_REACHED' as const,
+            limit: FREE_TASK_LIMIT,
+            current: currentAfterDeletes,
+          })
+          throw err
+        }
       }
 
       // 2. 更新処理
@@ -235,6 +272,19 @@ export async function POST(
 
   } catch (error) {
     console.error('Batch save error:', error)
+    if (isTaskLimitReachedError(error)) {
+      const limit = error.limit ?? 5
+      const current = error.current ?? null
+      return NextResponse.json(
+        {
+          error: 'TASK_LIMIT_REACHED',
+          message: `無料プランではタスクは${limit}件まで作成できます。アップグレードしてください。`,
+          limit,
+          current,
+        },
+        { status: 403 }
+      )
+    }
     return NextResponse.json(
       { error: 'Internal server error', message: (error as Error).message },
       { status: 500 }

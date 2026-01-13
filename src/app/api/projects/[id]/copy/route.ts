@@ -19,6 +19,7 @@ export async function POST(
     const { userId } = authResult
     
     const { ProjectDAL } = await import('@/dal/projects')
+    const { SubscriptionDAL } = await import('@/dal/subscriptions')
     const { id: sourceProjectId } = await params
     
     // コピー元プロジェクトの所有者チェック
@@ -28,6 +29,25 @@ export async function POST(
         { error: 'Forbidden: You do not have access to the source project' },
         { status: 403 }
       )
+    }
+
+    // 無料プラン制限: プロジェクト内タスク5件まで
+    const FREE_TASK_LIMIT = 5
+    const isPro = await SubscriptionDAL.isProUser(userId)
+    if (!isPro) {
+      const source = await ProjectDAL.getById(sourceProjectId)
+      const sourceTaskCount = source?.tasks?.length ?? 0
+      if (sourceTaskCount > FREE_TASK_LIMIT) {
+        return NextResponse.json(
+          {
+            error: 'TASK_LIMIT_REACHED',
+            message: `無料プランではタスクは${FREE_TASK_LIMIT}件までのプロジェクトのみコピーできます。アップグレードしてください。`,
+            limit: FREE_TASK_LIMIT,
+            current: sourceTaskCount,
+          },
+          { status: 403 }
+        )
+      }
     }
     
     const newProjectData = {

@@ -3,7 +3,9 @@ import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
 const isPublicRoute = createRouteMatcher([
   '/',
   '/sign-in(.*)',
-  '/sign-up(.*)'
+  '/sign-up(.*)',
+  // Stripe Webhook は Clerk 認証の対象外（Stripeからのサーバー間通信）
+  '/api/webhooks/stripe(.*)',
 ]);
 
 export default clerkMiddleware(async (auth, req) => {

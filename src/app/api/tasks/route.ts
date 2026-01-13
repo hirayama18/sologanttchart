@@ -17,6 +17,7 @@ export async function POST(request: NextRequest) {
 
     const { TaskDAL } = await import('@/dal/tasks')
     const { ProjectDAL } = await import('@/dal/projects')
+    const { SubscriptionDAL } = await import('@/dal/subscriptions')
     const body: CreateTaskRequest = await request.json()
     
     // プロジェクトの所有者チェック
@@ -26,6 +27,24 @@ export async function POST(request: NextRequest) {
         { error: 'Forbidden: You do not have access to this project' },
         { status: 403 }
       )
+    }
+
+    // 無料プラン制限: タスクはプロジェクト内で5件まで（deleted=falseのみカウント）
+    const FREE_TASK_LIMIT = 5
+    const isPro = await SubscriptionDAL.isProUser(userId)
+    if (!isPro) {
+      const current = await TaskDAL.countActiveByProjectId(body.projectId)
+      if (current >= FREE_TASK_LIMIT) {
+        return NextResponse.json(
+          {
+            error: 'TASK_LIMIT_REACHED',
+            message: `無料プランではタスクは${FREE_TASK_LIMIT}件まで作成できます。アップグレードしてください。`,
+            limit: FREE_TASK_LIMIT,
+            current,
+          },
+          { status: 403 }
+        )
+      }
     }
 
     console.log('Create Task Request Body:', JSON.stringify(body))

@@ -2,6 +2,12 @@ import { prisma } from '@/lib/prisma'
 import { CreateTaskData, UpdateTaskData, Task, TaskWithProject } from '@/lib/types/database'
 
 export class TaskDAL {
+  static async countActiveByProjectId(projectId: string): Promise<number> {
+    return prisma.task.count({
+      where: { projectId, deleted: false },
+    })
+  }
+
   /**
    * プロジェクト配下の全タスクの plannedStart / plannedEnd を n 日シフト
    * - deleted=true は除外

@@ -207,6 +207,10 @@ export default function GanttPage() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
+        if (errorData?.error === 'TASK_LIMIT_REACHED') {
+          alert(`${errorData.message}\n料金ページ(/pricing)からアップグレードできます。`)
+          return false
+        }
         throw new Error(errorData.message || 'Save failed')
       }
 
