@@ -44,6 +44,9 @@
 - [~] 🟢 ログインユーザーのプラン表示（Free / Pro）
   - 対象: `src/components/layouts/conditional-header.tsx`, `src/app/api/billing/status/route.ts`
   - 内容: ヘッダーに現在プランを表示し、購入済みかどうかを画面上で判別できるようにする
+- [x] 🟢 ヘッダーのPro導線を強調
+  - 対象: `src/components/layouts/conditional-header.tsx`
+  - 内容: Freeユーザー向け「Proにする」をアウトライン→塗りボタンに変更して視認性を向上
 - [~] 🟢 /pricing の購入導線をモダンに改善
   - 対象: `src/app/pricing/pricing-client.tsx`, `src/components/layouts/conditional-header.tsx`
   - 内容: 現在プランの見える化、Proメリットの提示、Freeユーザーに「Proにする」導線を追加
@@ -51,6 +54,13 @@
   - 対象: `src/app/api/projects/[id]/batch-save/route.ts`, `src/app/api/tasks/route.ts`, `src/app/api/projects/[id]/copy/route.ts`, `src/app/api/tasks/[id]/duplicate/route.ts`
   - 仕様: 無料ユーザーは「プロジェクト内のタスク数が5件を超える新規作成」を403で拒否（削除→作成の同時保存は差分で判定）
   - 例外: エクスポート（`/api/projects/[id]/export`）は無料のまま
+- [x] 🔴 セキュリティ: batch-save のIDOR対策（他プロジェクトtaskId混入の防止）
+  - 対象: `src/app/api/projects/[id]/batch-save/route.ts`
+  - 内容: updated/reordered/deleted の taskId を projectId スコープで一括検証し、更新クエリも projectId 条件付きに変更
+  - 期待結果: 他プロジェクト/他ユーザーのタスクIDを混入しても 403 となり改ざんできない
+- [x] 🔴 セキュリティ: 500レスポンスで内部エラー詳細（error.message）を返さない
+  - 対象: `src/app/api/**/route.ts`（一部）
+  - 内容: 500時のレスポンスから `message: (error as Error).message` を削除し、汎用エラーのみ返す（詳細はサーバログのみ）
 - [~] 🟢 Pricingページ（最小）と上限到達時の誘導
   - 既存UIの見た目を大きく変えず、`/pricing` を追加してアップグレード導線を提供
 

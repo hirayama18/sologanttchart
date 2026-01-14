@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Billing portal error:', error)
     return NextResponse.json(
-      { error: 'Internal Server Error', message: (error as Error).message },
+      { error: 'Internal Server Error' },
       { status: 500 }
     )
   }

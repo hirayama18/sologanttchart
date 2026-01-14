@@ -88,7 +88,7 @@ export async function POST(
   } catch (error) {
     console.error('Error shifting project tasks:', error)
     return NextResponse.json(
-      { error: 'Internal Server Error', message: (error as Error).message },
+      { error: 'Internal Server Error' },
       { status: 500 }
     )
   }

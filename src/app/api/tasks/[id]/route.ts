@@ -179,7 +179,7 @@ export async function PATCH(
   } catch (error) {
     console.error('Error updating task:', error)
     return NextResponse.json(
-      { error: 'Internal Server Error', message: (error as Error).message },
+      { error: 'Internal Server Error' },
       { status: 500 }
     )
   }

@@ -24,6 +24,10 @@ type TaskLimitReachedError = Error & {
   current: number
 }
 
+type ForbiddenError = Error & {
+  code: 'FORBIDDEN'
+}
+
 function isTaskLimitReachedError(error: unknown): error is TaskLimitReachedError {
   if (!(error instanceof Error)) return false
   const maybe = error as Partial<TaskLimitReachedError>
@@ -31,6 +35,12 @@ function isTaskLimitReachedError(error: unknown): error is TaskLimitReachedError
     maybe.code === 'TASK_LIMIT_REACHED' ||
     error.message === 'TASK_LIMIT_REACHED'
   )
+}
+
+function isForbiddenError(error: unknown): error is ForbiddenError {
+  if (!(error instanceof Error)) return false
+  const maybe = error as Partial<ForbiddenError>
+  return maybe.code === 'FORBIDDEN' || error.message === 'FORBIDDEN'
 }
 
 /**
@@ -91,6 +101,27 @@ export async function POST(
     // 明示的に timeout / maxWait を延長する。
     const result = await prisma.$transaction(async (tx) => {
       const createdTasks: { tempId?: string; id: string }[] = []
+
+      // --- Security: IDOR prevention ---
+      // updated/reordered/deleted に他プロジェクトの taskId が混ざっていないかを最初に一括検証
+      const updatedIds = (updated ?? []).map((u) => u.id)
+      const reorderedIds = (reordered ?? []).map((r) => r.id)
+      const deletedIds = deleted ?? []
+      const allTargetIds = Array.from(new Set([...updatedIds, ...reorderedIds, ...deletedIds])).filter(Boolean)
+
+      if (allTargetIds.length > 0) {
+        const ownedCount = await tx.task.count({
+          where: {
+            id: { in: allTargetIds },
+            projectId: projectId,
+          },
+        })
+        if (ownedCount !== allTargetIds.length) {
+          // 1件でも別プロジェクトの taskId が混ざっていれば拒否
+          const err: ForbiddenError = Object.assign(new Error('FORBIDDEN'), { code: 'FORBIDDEN' as const })
+          throw err
+        }
+      }
       
       // 1. 削除処理（論理削除）
       if (deleted && deleted.length > 0) {
@@ -131,19 +162,19 @@ export async function POST(
           // parentIdの解決
           let resolvedParentId: string | null | undefined = updates.parentId
           if (updates.parentId !== undefined && updates.parentId !== null) {
-            // 既存のIDの場合は存在確認
-            const parentExists = await tx.task.findUnique({
-              where: { id: updates.parentId },
-              select: { id: true, deleted: true }
+            // 既存のIDの場合は存在確認（同一プロジェクトに限定）
+            const parentExists = await tx.task.findFirst({
+              where: { id: updates.parentId, projectId: projectId, deleted: false },
+              select: { id: true },
             })
-            if (!parentExists || parentExists.deleted) {
+            if (!parentExists) {
               console.warn(`Parent task ${updates.parentId} not found or deleted, setting parentId to null`)
               resolvedParentId = null
             }
           }
           
-          await tx.task.update({
-            where: { id },
+          const updateResult = await tx.task.updateMany({
+            where: { id, projectId: projectId },
             data: {
               ...(updates.title !== undefined && { title: updates.title }),
               ...(updates.assignee !== undefined && { assignee: updates.assignee }),
@@ -151,9 +182,15 @@ export async function POST(
               ...(updates.plannedEnd !== undefined && { plannedEnd: parseDate(updates.plannedEnd) }),
               ...(updates.isCompleted !== undefined && { isCompleted: updates.isCompleted }),
               ...(updates.parentId !== undefined && { parentId: resolvedParentId ?? null }),
-              ...(updates.order !== undefined && { order: updates.order })
-            }
+              ...(updates.order !== undefined && { order: updates.order }),
+            },
           })
+
+          // 念のため: 1件も更新されない場合は拒否（事前検証をすり抜けた場合の保険）
+          if (updateResult.count !== 1) {
+            const err: ForbiddenError = Object.assign(new Error('FORBIDDEN'), { code: 'FORBIDDEN' as const })
+            throw err
+          }
         }
       }
 
@@ -200,11 +237,11 @@ export async function POST(
               }
             } else {
               // 既存のIDの場合は存在確認
-              const parentExists = await tx.task.findUnique({
-                where: { id: taskData.parentId },
-                select: { id: true, deleted: true }
+              const parentExists = await tx.task.findFirst({
+                where: { id: taskData.parentId, projectId: projectId, deleted: false },
+                select: { id: true },
               })
-              if (!parentExists || parentExists.deleted) {
+              if (!parentExists) {
                 console.warn(`Parent task ${taskData.parentId} not found or deleted, setting parentId to null`)
                 resolvedParentId = null
               } else {
@@ -241,10 +278,14 @@ export async function POST(
       // 4. 並び替え処理（新規作成後に実行）
       if (reordered && reordered.length > 0) {
         for (const { id, order } of reordered) {
-          await tx.task.update({
-            where: { id },
-            data: { order }
+          const updateResult = await tx.task.updateMany({
+            where: { id, projectId: projectId },
+            data: { order },
           })
+          if (updateResult.count !== 1) {
+            const err: ForbiddenError = Object.assign(new Error('FORBIDDEN'), { code: 'FORBIDDEN' as const })
+            throw err
+          }
         }
       }
 
@@ -285,8 +326,11 @@ export async function POST(
         { status: 403 }
       )
     }
+    if (isForbiddenError(error)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
     return NextResponse.json(
-      { error: 'Internal server error', message: (error as Error).message },
+      { error: 'Internal server error' },
       { status: 500 }
     )
   }

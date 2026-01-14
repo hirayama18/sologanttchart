@@ -61,7 +61,11 @@ export function ConditionalHeader() {
             </div>
             {isPro === false && (
               <Link href="/pricing">
-                <Button size="sm" variant="outline">
+                <Button
+                  size="sm"
+                  variant="default"
+                  className="rounded-full bg-[#6c47ff] text-white shadow hover:bg-[#5c3cff]"
+                >
                   Proにする
                 </Button>
               </Link>
