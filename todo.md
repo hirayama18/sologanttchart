@@ -44,6 +44,9 @@
 - [~] 🟢 ログインユーザーのプラン表示（Free / Pro）
   - 対象: `src/components/layouts/conditional-header.tsx`, `src/app/api/billing/status/route.ts`
   - 内容: ヘッダーに現在プランを表示し、購入済みかどうかを画面上で判別できるようにする
+- [x] 🟢 プロジェクト一覧からpricingへ遷移できる導線 + 購入日時の可視化
+  - 対象: `src/app/projects/page.tsx`
+  - 内容: プロジェクト一覧画面に「現在のプラン（Free/Pro）」「購入日時（purchasedAt）」「/pricing へのボタン」を表示して、ユーザーが購入タイミングを確認できるようにする
 - [x] 🟢 ヘッダーのPro導線を強調
   - 対象: `src/components/layouts/conditional-header.tsx`
   - 内容: Freeユーザー向け「Proにする」をアウトライン→塗りボタンに変更して視認性を向上
