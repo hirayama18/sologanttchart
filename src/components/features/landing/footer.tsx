@@ -26,6 +26,7 @@ const navigation = {
     { name: "利用規約", href: "#terms" },
     { name: "セキュリティ", href: "#security" },
     { name: "Cookie設定", href: "#cookies" },
+    { name: "特定商取引法に基づく表記", href: "/tokushoho" },
   ],
 }
 

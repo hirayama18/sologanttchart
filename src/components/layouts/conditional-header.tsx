@@ -38,8 +38,8 @@ export function ConditionalHeader() {
     }
   }, [])
 
-  // ランディングページの場合はヘッダーを表示しない
-  if (pathname === '/') {
+  // ランディングページと特定商取引法ページの場合はヘッダーを表示しない
+  if (pathname === '/' || pathname === '/tokushoho' || pathname === '/commerce-disclosure') {
     return null
   }
 

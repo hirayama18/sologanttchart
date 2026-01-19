@@ -41,6 +41,12 @@
   - DB: 課金状態テーブル追加（ユーザーID / customerId / paymentIntentId / status / purchasedAt）
   - API: Checkoutセッション作成（Promotion Code対応）、Webhook署名検証、Billing Portal（購入情報確認）
   - 注意: WebhookはClerk認証の対象外（public route）
+- [x] 🟡 「特定商取引法に基づく表記」（Stripe commerce disclosure）ページの作成
+  - 対象: `src/app/tokushoho/page.tsx`, `src/app/commerce-disclosure/page.tsx`, `src/middleware.ts`
+  - 内容: `/tokushoho` を追加し、`/commerce-disclosure` は `/tokushoho` にリダイレクト。いずれも未ログインで閲覧可能に設定
+  - 追記: 「販売価格」の説明に `/pricing` へのリンクを追加
+  - 追記: 推奨環境（Chrome動作確認済み）を記載
+  - 追記: LPフッターと `/pricing` から `/tokushoho` へ遷移できる導線を追加
 - [~] 🟢 ログインユーザーのプラン表示（Free / Pro）
   - 対象: `src/components/layouts/conditional-header.tsx`, `src/app/api/billing/status/route.ts`
   - 内容: ヘッダーに現在プランを表示し、購入済みかどうかを画面上で判別できるようにする

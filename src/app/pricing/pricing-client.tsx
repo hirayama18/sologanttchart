@@ -91,6 +91,10 @@ export function PricingClient() {
             <Link href="/projects" className="text-sm text-gray-600 hover:text-gray-900">
               プロジェクトへ戻る
             </Link>
+            <span className="text-sm text-gray-300">/</span>
+            <Link href="/tokushoho" className="text-sm text-gray-600 hover:text-gray-900">
+              特定商取引法に基づく表記
+            </Link>
           </div>
         </div>
 
