@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { SignInButton, SignedIn, SignedOut, useAuth } from '@clerk/nextjs'
 
 type BillingStatus = {
   isPro: boolean
@@ -12,10 +13,12 @@ type BillingStatus = {
 }
 
 export function PricingClient() {
+  const { isLoaded, isSignedIn } = useAuth()
   const [loading, setLoading] = useState<'checkout' | 'portal' | null>(null)
   const [billingStatus, setBillingStatus] = useState<BillingStatus | null>(null)
 
   useEffect(() => {
+    if (!isLoaded || !isSignedIn) return
     let cancelled = false
     const run = async () => {
       try {
@@ -32,7 +35,7 @@ export function PricingClient() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [isLoaded, isSignedIn])
 
   const isPro = billingStatus?.isPro === true
   const purchasedAtLabel = useMemo(() => {
@@ -123,9 +126,16 @@ export function PricingClient() {
             <div className="text-sm text-gray-600">
               {purchasedAtLabel ? `購入日時: ${purchasedAtLabel}` : '購入情報: -'}
             </div>
-            <Button variant="outline" onClick={openPortal} disabled={loading !== null}>
-              {loading === 'portal' ? '起動中...' : '購入情報を確認する'}
-            </Button>
+            <SignedOut>
+              <SignInButton mode="modal" forceRedirectUrl="/pricing" fallbackRedirectUrl="/pricing">
+                <Button variant="outline">購入情報を確認する</Button>
+              </SignInButton>
+            </SignedOut>
+            <SignedIn>
+              <Button variant="outline" onClick={openPortal} disabled={loading !== null}>
+                {loading === 'portal' ? '起動中...' : '購入情報を確認する'}
+              </Button>
+            </SignedIn>
           </CardContent>
         </Card>
 
@@ -184,9 +194,16 @@ export function PricingClient() {
               </ul>
 
               <div className="flex flex-wrap gap-2">
-                <Button onClick={startCheckout} disabled={loading !== null || isPro}>
-                  {isPro ? '購入済み' : loading === 'checkout' ? '起動中...' : 'Proを購入する（クーポン可）'}
-                </Button>
+                <SignedOut>
+                  <SignInButton mode="modal" forceRedirectUrl="/pricing" fallbackRedirectUrl="/pricing">
+                    <Button>Proを購入する（クーポン可）</Button>
+                  </SignInButton>
+                </SignedOut>
+                <SignedIn>
+                  <Button onClick={startCheckout} disabled={loading !== null || isPro}>
+                    {isPro ? '購入済み' : loading === 'checkout' ? '起動中...' : 'Proを購入する（クーポン可）'}
+                  </Button>
+                </SignedIn>
                 <Link href="/projects">
                   <Button variant="outline">あとで購入する</Button>
                 </Link>

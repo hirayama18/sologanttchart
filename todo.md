@@ -47,6 +47,8 @@
   - 追記: 「販売価格」の説明に `/pricing` へのリンクを追加
   - 追記: 推奨環境（Chrome動作確認済み）を記載
   - 追記: LPフッターと `/pricing` から `/tokushoho` へ遷移できる導線を追加
+  - 追記: `/pricing` を未ログイン閲覧できる公開ルートに変更
+  - 追記: 未ログインで購入操作をした場合はサインインへ誘導（戻り先: `/pricing`）
 - [~] 🟢 ログインユーザーのプラン表示（Free / Pro）
   - 対象: `src/components/layouts/conditional-header.tsx`, `src/app/api/billing/status/route.ts`
   - 内容: ヘッダーに現在プランを表示し、購入済みかどうかを画面上で判別できるようにする
