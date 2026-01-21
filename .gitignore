@@ -40,3 +40,6 @@ next-env.d.ts
 
 # npm cache
 .npm-cache/
+
+# Local Netlify folder
+.netlify

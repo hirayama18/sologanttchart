@@ -283,8 +283,48 @@ export async function POST(
   // タスク行
   // 動的な色システムを使用（固定色から変更）
 
+  // Web側表示と同様に「親 → 子」のツリー順に並べ替える。
+  // DBの order が「親 → 子」になっていない場合でも、Excelでは常に正しい階層で出力する。
+  const sortedTasks = (() => {
+    const tasks = project.tasks ?? []
+    const rootTasks = tasks
+      .filter((t) => !t.parentId)
+      .slice()
+      .sort((a, b) => a.order - b.order)
+
+    const subTasksMap = new Map<string, typeof tasks>()
+    tasks.forEach((t) => {
+      if (!t.parentId) return
+      const list = subTasksMap.get(t.parentId) ?? []
+      list.push(t)
+      subTasksMap.set(t.parentId, list)
+    })
+
+    const result: typeof tasks = []
+    rootTasks.forEach((root) => {
+      result.push(root)
+      const subs = subTasksMap.get(root.id)
+      if (subs && subs.length > 0) {
+        subs
+          .slice()
+          .sort((a, b) => a.order - b.order)
+          .forEach((sub) => result.push(sub))
+      }
+    })
+
+    // 念のため孤児タスク（親が見つからない子タスク等）は末尾へ
+    const processedIds = new Set(result.map((t) => t.id))
+    const orphans = tasks
+      .filter((t) => !processedIds.has(t.id))
+      .slice()
+      .sort((a, b) => a.order - b.order)
+    result.push(...orphans)
+
+    return result
+  })()
+
   let rowIndex = headerOffset + headerRowCount
-  for (const t of project.tasks) {
+  for (const t of sortedTasks) {
     const row = sheet.getRow(rowIndex)
     const isParentTask = !t.parentId
     row.getCell(1).value = t.title
